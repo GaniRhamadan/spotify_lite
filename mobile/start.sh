@@ -1,0 +1,1 @@
+/home/gani/spotify_lite/start.sh

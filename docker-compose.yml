@@ -1,0 +1,83 @@
+version: '3.8'
+
+services:
+  # 1. Database PostgreSQL
+  postgres:
+    image: postgres:16-alpine
+    container_name: spotify_lite_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgrespassword2026
+      POSTGRES_DB: spotify_lite
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./backend/src/config/schema.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # 2. Redis Caching & Session
+  redis:
+    image: redis:7-alpine
+    container_name: spotify_lite_redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+
+  # 3. Backend API Service
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: spotify_lite_backend
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    environment:
+      PORT: 5000
+      NODE_ENV: production
+      API_BASE_URL: http://localhost:5000
+      JWT_SECRET: spotify_lite_super_secret_jwt_key_2026_production_anti_lag
+      JWT_EXPIRES_IN: 15m
+      JWT_REFRESH_SECRET: spotify_lite_refresh_key_ultra_secure_2026
+      JWT_REFRESH_EXPIRES_IN: 7d
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: postgres
+      DB_PASSWORD: postgrespassword2026
+      DB_NAME: spotify_lite
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+    volumes:
+      - backend_storage:/home/gani/spotify_lite/backend/storage
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+
+  # 4. Web Frontend & Nginx Reverse Proxy
+  nginx:
+    image: nginx:alpine
+    container_name: spotify_lite_nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./web/dist:/usr/share/nginx/html:ro
+    depends_on:
+      - backend
+
+
+volumes:
+  postgres_data:
+  redis_data:
+  backend_storage:
