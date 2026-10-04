@@ -55,36 +55,75 @@ class DirectMusicService {
     }
   }
 
-  /// 2. Dapatkan URL Audio Stream (M4A/AAC) Berkualitas Tinggi & Hemat Data
-  Future<String?> getStreamUrl(String songId) async {
-    final cleanId = songId.replaceFirst('yt_', '');
+  /// 2. Dapatkan URL Audio Stream (M4A/AAC) Berkualitas Tinggi & Kompatibel Penuh ExoPlayer Android
+  Future<String?> getStreamUrl(String songId, {String? title, String? artist}) async {
+    final cleanId = songId.replaceFirst('yt_', '').trim();
 
-    // Cek apakah URL audio masih valid di cache memori (berlaku 5 jam)
-    final cached = _streamCache[cleanId];
-    if (cached != null && DateTime.now().isBefore(cached.expiresAt)) {
-      return cached.url;
+    // 1. Cek cache memori dulu
+    if (cleanId.isNotEmpty) {
+      final cached = _streamCache[cleanId];
+      if (cached != null && DateTime.now().isBefore(cached.expiresAt)) {
+        return cached.url;
+      }
     }
 
-    try {
-      final manifest = await yt.videos.streamsClient.getManifest(cleanId);
-      final audioStreams = manifest.audioOnly;
-      if (audioStreams.isEmpty) return null;
+    // 2. Coba ambil langsung jika cleanId adalah YouTube ID 11 karakter
+    if (cleanId.length == 11) {
+      try {
+        final video = await yt.videos.get(cleanId);
+        final manifest = await yt.videos.streamsClient.getManifest(video.id);
+        final audioStreams = manifest.audioOnly;
+        if (audioStreams.isNotEmpty) {
+          // Utamakan MP4 (M4A / AAC) karena 100% didukung hardware decoder Android ExoPlayer
+          final mp4Audios = audioStreams.where((s) => s.container.name.toLowerCase() == 'mp4');
+          final bestAudio = mp4Audios.isNotEmpty
+              ? mp4Audios.withHighestBitrate()
+              : audioStreams.withHighestBitrate();
 
-      // Ambil stream audio dengan kualitas bitrate terbaik
-      final bestAudio = audioStreams.withHighestBitrate();
-      final streamUrl = bestAudio.url.toString();
-
-      // Simpan ke cache
-      _streamCache[cleanId] = _CachedStream(
-        url: streamUrl,
-        expiresAt: DateTime.now().add(const Duration(hours: 5)),
-      );
-
-      return streamUrl;
-    } catch (e) {
-      debugPrint('DirectMusicService.getStreamUrl error for $cleanId: $e');
-      return null;
+          final streamUrl = bestAudio.url.toString();
+          _streamCache[cleanId] = _CachedStream(
+            url: streamUrl,
+            expiresAt: DateTime.now().add(const Duration(hours: 5)),
+          );
+          return streamUrl;
+        }
+      } catch (e) {
+        debugPrint('Direct lookup failed for video ID $cleanId: $e. Mencoba fallback pencarian...');
+      }
     }
+
+    // 3. Fallback: Cari judul & nama artis di YouTube Music
+    final searchTerms = '${title ?? ''} ${artist ?? ''}'.trim();
+    if (searchTerms.isNotEmpty) {
+      try {
+        debugPrint('Mencari fallback stream untuk query: $searchTerms');
+        final searchResults = await yt.search.search(searchTerms);
+        if (searchResults.isNotEmpty) {
+          final topVideo = searchResults.first;
+          final manifest = await yt.videos.streamsClient.getManifest(topVideo.id);
+          final audioStreams = manifest.audioOnly;
+          if (audioStreams.isNotEmpty) {
+            final mp4Audios = audioStreams.where((s) => s.container.name.toLowerCase() == 'mp4');
+            final bestAudio = mp4Audios.isNotEmpty
+                ? mp4Audios.withHighestBitrate()
+                : audioStreams.withHighestBitrate();
+
+            final streamUrl = bestAudio.url.toString();
+            if (cleanId.isNotEmpty) {
+              _streamCache[cleanId] = _CachedStream(
+                url: streamUrl,
+                expiresAt: DateTime.now().add(const Duration(hours: 5)),
+              );
+            }
+            return streamUrl;
+          }
+        }
+      } catch (e) {
+        debugPrint('Fallback search failed for $searchTerms: $e');
+      }
+    }
+
+    return null;
   }
 
   /// 3. Kategori: Lagu Populer & Hits Indonesia

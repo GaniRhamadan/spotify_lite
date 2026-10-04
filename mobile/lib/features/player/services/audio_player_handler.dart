@@ -176,7 +176,11 @@ class AudioPlayerHandler extends BaseAudioHandler with SeekHandler {
       } else {
         // Direct Streaming: Dapatkan audio stream Google CDN langsung jika belum ada
         if (streamUrl == null || !streamUrl.contains('googlevideo.com')) {
-          final directUrl = await DirectMusicService.instance.getStreamUrl(item.id);
+          final directUrl = await DirectMusicService.instance.getStreamUrl(
+            item.id,
+            title: item.title,
+            artist: item.artist,
+          );
           if (directUrl != null) {
             streamUrl = directUrl;
           }
