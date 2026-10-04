@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:dio/dio.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -39,7 +40,7 @@ class DownloadService {
 
       return targetPath;
     } catch (e) {
-      print('Gagal mengunduh lagu offline: $e');
+      debugPrint('Gagal mengunduh lagu offline: $e');
       return null;
     }
   }

@@ -34,7 +34,7 @@ class AppTheme {
         activeTrackColor: AppColors.primary,
         inactiveTrackColor: AppColors.border,
         thumbColor: Colors.white,
-        overlayColor: AppColors.primary.withOpacity(0.2),
+        overlayColor: AppColors.primary.withValues(alpha: 0.2),
         trackHeight: 3.0,
         thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6.0),
       ),

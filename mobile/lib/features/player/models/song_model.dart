@@ -14,6 +14,7 @@ class SongModel {
   final int playCount;
   bool isLiked;
   final String? localFilePath; // Jika lagu sudah diunduh untuk mode offline
+  final String? directStreamUrl;
 
   SongModel({
     required this.id,
@@ -28,6 +29,7 @@ class SongModel {
     this.playCount = 0,
     this.isLiked = false,
     this.localFilePath,
+    this.directStreamUrl,
   });
 
   factory SongModel.fromJson(Map<String, dynamic> json) {
@@ -44,6 +46,7 @@ class SongModel {
       playCount: json['play_count'] ?? 0,
       isLiked: json['is_liked'] ?? false,
       localFilePath: json['local_file_path'],
+      directStreamUrl: json['direct_stream_url'],
     );
   }
 
@@ -61,6 +64,7 @@ class SongModel {
       'play_count': playCount,
       'is_liked': isLiked,
       'local_file_path': localFilePath,
+      'direct_stream_url': directStreamUrl,
     };
   }
 
@@ -74,8 +78,10 @@ class SongModel {
       duration: Duration(seconds: durationSeconds),
       artUri: coverUrl != null ? Uri.parse(coverUrl!) : null,
       extras: {
-        'url': localFilePath ?? '${ApiEndpoints.baseUrl}${ApiEndpoints.streamSong(id)}',
+        'url': localFilePath ?? directStreamUrl ?? '${ApiEndpoints.baseUrl}${ApiEndpoints.streamSong(id)}',
         'is_offline': localFilePath != null,
+        'song_id': id,
+        'has_direct': directStreamUrl != null,
       },
     );
   }

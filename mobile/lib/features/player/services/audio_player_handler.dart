@@ -1,9 +1,10 @@
-import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:audio_service/audio_service.dart';
 import 'package:audio_session/audio_session.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
+import '../../../core/services/direct_music_service.dart';
 
 /// Implementasi Engine Pemutar Musik Latar Belakang (Background Playback)
 /// Mengintegrasikan just_audio dengan AudioService (Foreground Service Android & MediaSession)
@@ -167,14 +168,26 @@ class AudioPlayerHandler extends BaseAudioHandler with SeekHandler {
     mediaItem.add(item);
     _broadcastPlaybackState();
 
-    final streamUrl = item.extras?['url'] as String?;
-    if (streamUrl == null) return;
+    String? streamUrl = item.extras?['url'] as String?;
 
     try {
-      if (item.extras?['is_offline'] == true) {
+      if (item.extras?['is_offline'] == true && streamUrl != null) {
         await _player.setFilePath(streamUrl);
       } else {
-        // HTTP 206 Byte-Range streaming via ExoPlayer
+        // Direct Streaming: Dapatkan audio stream Google CDN langsung jika belum ada
+        if (streamUrl == null || !streamUrl.contains('googlevideo.com')) {
+          final directUrl = await DirectMusicService.instance.getStreamUrl(item.id);
+          if (directUrl != null) {
+            streamUrl = directUrl;
+          }
+        }
+
+        if (streamUrl == null || streamUrl.isEmpty) {
+          debugPrint('Tidak dapat menemukan URL stream untuk lagu: ${item.id}');
+          return;
+        }
+
+        // Direct Streaming Audio M4A/AAC via ExoPlayer
         await _player.setUrl(streamUrl, preload: true);
       }
 
@@ -190,7 +203,7 @@ class AudioPlayerHandler extends BaseAudioHandler with SeekHandler {
       // Simpan status terakhir ke SharedPreferences
       _saveLastState(item.id, index);
     } catch (e) {
-      print('Gagal memutar audio: $e');
+      debugPrint('Gagal memutar audio: $e');
     }
   }
 

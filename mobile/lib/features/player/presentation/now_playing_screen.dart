@@ -176,7 +176,7 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
                         borderRadius: BorderRadius.circular(16),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withOpacity(0.6),
+                            color: Colors.black.withValues(alpha: 0.6),
                             blurRadius: 25,
                             offset: const Offset(0, 10),
                           ),

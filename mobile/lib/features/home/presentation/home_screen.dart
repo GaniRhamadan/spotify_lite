@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../../../core/constants/app_colors.dart';
-import '../../../core/network/api_client.dart';
+import '../../../core/services/direct_music_service.dart';
 import '../../player/models/song_model.dart';
 import '../../player/services/audio_player_handler.dart';
 import '../../library/services/favorites_service.dart';
@@ -34,28 +34,24 @@ class _HomeScreenState extends State<HomeScreen> {
     });
 
     try {
-      final dio = ApiClient().dio;
-      final res = await dio.get('/songs?limit=50');
-      if (res.statusCode == 200 && res.data['success'] == true) {
-        final List list = res.data['data'];
+      final trending = await DirectMusicService.instance.getTrendingSongs();
+      final relaxing = await DirectMusicService.instance.getRelaxingSongs();
+      if (mounted) {
         setState(() {
-          _songs = list.map((item) => SongModel.fromJson(item)).toList();
-          _trending = List.from(_songs)..shuffle();
+          _songs = trending;
+          _trending = relaxing.isNotEmpty ? relaxing : (List.from(trending)..shuffle());
           _isLoading = false;
           _errorMessage = null;
         });
-      } else {
-        setState(() {
-          _isLoading = false;
-          _errorMessage = 'Respons server tidak sesuai';
-        });
       }
     } catch (e) {
-      debugPrint('Gagal memuat data lagu: $e');
-      setState(() {
-        _isLoading = false;
-        _errorMessage = 'Tidak dapat menghubungi server di ${ApiClient().dio.options.baseUrl}.\nPastikan backend telah berjalan.';
-      });
+      debugPrint('Gagal memuat lagu direct: $e');
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _errorMessage = 'Gagal memuat rekomendasi musik. Periksa koneksi internet Anda.';
+        });
+      }
     }
   }
 

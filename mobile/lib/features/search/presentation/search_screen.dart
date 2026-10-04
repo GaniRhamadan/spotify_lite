@@ -2,7 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../../../core/constants/app_colors.dart';
-import '../../../core/network/api_client.dart';
+import '../../../core/services/direct_music_service.dart';
 import '../../player/models/song_model.dart';
 import '../../player/services/audio_player_handler.dart';
 import '../../library/services/favorites_service.dart';
@@ -32,18 +32,18 @@ class _SearchScreenState extends State<SearchScreen> {
     _debounceTimer = Timer(const Duration(milliseconds: 300), () async {
       setState(() => _isSearching = true);
       try {
-        final dio = ApiClient().dio;
-        final res = await dio.get('/search?q=${Uri.encodeComponent(query.trim())}');
-        if (res.statusCode == 200 && res.data['success'] == true) {
-          final List songsList = res.data['data']['songs'] ?? [];
+        final songs = await DirectMusicService.instance.searchSongs(query.trim());
+        if (mounted) {
           setState(() {
-            _results = songsList.map((item) => SongModel.fromJson(item)).toList();
+            _results = songs;
           });
         }
       } catch (e) {
-        print('Error pencarian: $e');
+        debugPrint('Error pencarian direct: $e');
       } finally {
-        setState(() => _isSearching = false);
+        if (mounted) {
+          setState(() => _isSearching = false);
+        }
       }
     });
   }

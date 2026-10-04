@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../../../core/constants/app_colors.dart';
-import '../../../core/network/api_client.dart';
+import '../../../core/services/direct_music_service.dart';
 import '../../player/models/song_model.dart';
 import '../../player/services/audio_player_handler.dart';
 import '../services/favorites_service.dart';
@@ -97,22 +97,9 @@ class _LikedSongsScreenState extends State<LikedSongsScreen> {
       final sampleSong = (favorites..shuffle()).first;
       final query = sampleSong.artistName.isNotEmpty ? sampleSong.artistName : sampleSong.title;
 
-      final dio = ApiClient().dio;
-      final res = await dio.get('/search?q=${Uri.encodeComponent(query)}');
-
-      List<SongModel> recommendedSongs = [];
-      if (res.statusCode == 200 && res.data['success'] == true) {
-        final List songsList = res.data['data']['songs'] ?? [];
-        recommendedSongs = songsList.map((item) => SongModel.fromJson(item)).toList();
-      }
-
+      List<SongModel> recommendedSongs = await DirectMusicService.instance.searchSongs('Lagu mirip $query', limit: 20);
       if (recommendedSongs.isEmpty) {
-        // Fallback ke lagu trending server
-        final trendRes = await dio.get('/songs?limit=20');
-        if (trendRes.statusCode == 200 && trendRes.data['success'] == true) {
-          final List list = trendRes.data['data'] ?? [];
-          recommendedSongs = list.map((item) => SongModel.fromJson(item)).toList();
-        }
+        recommendedSongs = await DirectMusicService.instance.getTrendingSongs();
       }
 
       if (recommendedSongs.isNotEmpty && mounted) {
