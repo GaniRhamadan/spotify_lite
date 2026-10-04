@@ -1,24 +1,23 @@
 import 'package:shared_preferences/shared_preferences.dart';
 
 class ApiEndpoints {
-  // Default: 127.0.0.1 (aktif otomatis dengan adb reverse tcp:5000 tcp:5000)
-  // Untuk emulator: 10.0.2.2:5000, Untuk Wi-Fi LAN: 192.168.1.20:5000
-  static String baseUrl = 'http://127.0.0.1:5000/api/v1';
+  // Default: Cloudflare Secure Tunnel (Aktif Online untuk Seluruh Jaringan 4G/5G/Wi-Fi)
+  static String baseUrl = 'https://receiver-yet-crafts-irc.trycloudflare.com/api/v1';
 
   static const String keyCustomBaseUrl = 'custom_api_base_url';
 
   static const List<Map<String, String>> presets = [
     {
-      'label': 'USB Reverse (Direkomendasikan via Kabel)',
+      'label': 'Cloudflare Tunnel Publik (Online 4G/5G/Wi-Fi)',
+      'url': 'https://receiver-yet-crafts-irc.trycloudflare.com/api/v1',
+    },
+    {
+      'label': 'Wi-Fi LAN Laptop (192.168.1.22)',
+      'url': 'http://192.168.1.22:5000/api/v1',
+    },
+    {
+      'label': 'Localhost / Termux di HP (127.0.0.1)',
       'url': 'http://127.0.0.1:5000/api/v1',
-    },
-    {
-      'label': 'Wi-Fi LAN (192.168.1.20)',
-      'url': 'http://192.168.1.20:5000/api/v1',
-    },
-    {
-      'label': 'Emulator Android Studio (10.0.2.2)',
-      'url': 'http://10.0.2.2:5000/api/v1',
     },
   ];
 

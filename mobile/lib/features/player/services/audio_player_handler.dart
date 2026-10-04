@@ -4,7 +4,7 @@ import 'package:audio_session/audio_session.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
-import '../../../core/services/direct_music_service.dart';
+import '../../../core/constants/api_endpoints.dart';
 
 /// Implementasi Engine Pemutar Musik Latar Belakang (Background Playback)
 /// Mengintegrasikan just_audio dengan AudioService (Foreground Service Android & MediaSession)
@@ -174,25 +174,10 @@ class AudioPlayerHandler extends BaseAudioHandler with SeekHandler {
       if (item.extras?['is_offline'] == true && streamUrl != null) {
         await _player.setFilePath(streamUrl);
       } else {
-        // Direct Streaming: Dapatkan audio stream Google CDN langsung jika belum ada
-        if (streamUrl == null || !streamUrl.contains('googlevideo.com')) {
-          final directUrl = await DirectMusicService.instance.getStreamUrl(
-            item.id,
-            title: item.title,
-            artist: item.artist,
-          );
-          if (directUrl != null) {
-            streamUrl = directUrl;
-          }
-        }
-
-        if (streamUrl == null || streamUrl.isEmpty) {
-          debugPrint('Tidak dapat menemukan URL stream untuk lagu: ${item.id}');
-          return;
-        }
-
-        // Direct Streaming Audio M4A/AAC via ExoPlayer
-        await _player.setUrl(streamUrl, preload: true);
+        // Gunakan streaming server backend (yt-dlp) untuk menghindari 403 Forbidden dari Google CDN
+        final serverStreamUrl = '${ApiEndpoints.baseUrl}${ApiEndpoints.streamSong(item.id)}';
+        debugPrint('Memutar stream audio via backend: $serverStreamUrl');
+        await _player.setUrl(serverStreamUrl, preload: true);
       }
 
       if (_player.duration != null && _player.duration != item.duration) {
