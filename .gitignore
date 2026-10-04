@@ -1,0 +1,28 @@
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+dist/
+build/
+
+# Environment Variables
+.env
+.env.local
+.env.production
+
+# Flutter & Dart
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+*.apk
+mobile/build/
+mobile/.dart_tool/
+
+# Temporary / OS
+.DS_Store
+Thumbs.db
+*.log
+phone_screen.png
+/tmp/

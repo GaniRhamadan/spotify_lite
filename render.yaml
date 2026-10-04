@@ -1,0 +1,19 @@
+services:
+  # 1. Backend API Spotify Lite
+  - type: web
+    name: spotify-lite-api
+    runtime: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    plan: free
+    region: singapore # Server data center Singapura (paling cepat untuk pengguna Indonesia)
+    envVars:
+      - key: PORT
+        value: 5000
+      - key: NODE_ENV
+        value: production
+      - key: JWT_SECRET
+        generateValue: true
+      - key: JWT_REFRESH_SECRET
+        generateValue: true
+    healthCheckPath: /health

@@ -1,16 +1,26 @@
 import { Pool } from 'pg';
 import { ENV } from './env';
 
-export const pool = new Pool({
-  host: ENV.DB_HOST,
-  port: ENV.DB_PORT,
-  user: ENV.DB_USER,
-  password: ENV.DB_PASSWORD,
-  database: ENV.DB_NAME,
-  max: 20,
-  idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 2000,
-});
+export const pool = new Pool(
+  process.env.DATABASE_URL
+    ? {
+        connectionString: process.env.DATABASE_URL,
+        ssl: { rejectUnauthorized: false },
+        max: 20,
+        idleTimeoutMillis: 30000,
+        connectionTimeoutMillis: 5000,
+      }
+    : {
+        host: ENV.DB_HOST,
+        port: ENV.DB_PORT,
+        user: ENV.DB_USER,
+        password: ENV.DB_PASSWORD,
+        database: ENV.DB_NAME,
+        max: 20,
+        idleTimeoutMillis: 30000,
+        connectionTimeoutMillis: 2000,
+      }
+);
 
 let isPostgresConnected = false;
 

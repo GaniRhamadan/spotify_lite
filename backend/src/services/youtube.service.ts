@@ -21,9 +21,9 @@ export interface YTSong {
   is_public: boolean;
 }
 
-const YTDLP_PATH = fs.existsSync('/home/gani/.local/bin/yt-dlp')
-  ? '/home/gani/.local/bin/yt-dlp'
-  : 'yt-dlp';
+const YTDLP_PATH = fs.existsSync('/usr/local/bin/yt-dlp')
+  ? '/usr/local/bin/yt-dlp'
+  : (fs.existsSync('/home/gani/.local/bin/yt-dlp') ? '/home/gani/.local/bin/yt-dlp' : 'yt-dlp');
 
 // Antrean download aktif untuk menghindari download ganda file yang sama
 const activeDownloads = new Map<string, Promise<string>>();
