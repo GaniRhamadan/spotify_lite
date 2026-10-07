@@ -69,8 +69,13 @@ export const createApp = (): Application => {
 
   // Endpoint Download APK Release Langsung ke HP
   app.get('/download/spotify-lite.apk', (_req, res) => {
-    const apkPath = path.resolve(__dirname, '../../mobile/build/app/outputs/flutter-apk/app-release.apk');
-    if (fs.existsSync(apkPath)) {
+    const candidatePaths = [
+      path.resolve(__dirname, '../../mobile/build/app/outputs/flutter-apk/app-release.apk'),
+      path.resolve(__dirname, '../public/spotify-lite.apk'),
+      path.resolve(process.cwd(), 'public/spotify-lite.apk'),
+    ];
+    const apkPath = candidatePaths.find((p) => fs.existsSync(p));
+    if (apkPath) {
       res.download(apkPath, 'SpotifyLite-Release.apk');
     } else {
       res.status(404).send('Berkas APK belum siap.');

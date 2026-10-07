@@ -21,18 +21,163 @@ export interface YTSong {
   is_public: boolean;
 }
 
-const YTDLP_PATH = fs.existsSync('/usr/local/bin/yt-dlp')
-  ? '/usr/local/bin/yt-dlp'
-  : (fs.existsSync('/home/gani/.local/bin/yt-dlp') ? '/home/gani/.local/bin/yt-dlp' : 'yt-dlp');
+let cachedYtdlpPath: string | null = null;
+
+async function resolveYtdlpBinary(): Promise<string> {
+  if (cachedYtdlpPath && fs.existsSync(cachedYtdlpPath)) {
+    return cachedYtdlpPath;
+  }
+
+  const possiblePaths = [
+    '/usr/local/bin/yt-dlp',
+    '/usr/bin/yt-dlp',
+    '/home/gani/.local/bin/yt-dlp',
+    path.join(process.env.HOME || '', '.local/bin/yt-dlp'),
+    path.join(ENV.STORAGE_PATH, 'yt-dlp'),
+    '/tmp/yt-dlp',
+  ];
+
+  for (const p of possiblePaths) {
+    if (fs.existsSync(p)) {
+      cachedYtdlpPath = p;
+      return p;
+    }
+  }
+
+  // Jika belum ada di server, coba unduh binary mandiri yt-dlp ke folder storage
+  try {
+    const storageYtdlp = path.join(ENV.STORAGE_PATH, 'yt-dlp');
+    if (!fs.existsSync(ENV.STORAGE_PATH)) {
+      fs.mkdirSync(ENV.STORAGE_PATH, { recursive: true });
+    }
+    console.log('📥 Mempersiapkan binary yt-dlp mandiri untuk server...');
+    const res = await fetch('https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp');
+    if (res.ok) {
+      const buffer = Buffer.from(await res.arrayBuffer());
+      fs.writeFileSync(storageYtdlp, buffer, { mode: 0o755 });
+      cachedYtdlpPath = storageYtdlp;
+      console.log('✅ yt-dlp mandiri siap di:', storageYtdlp);
+      return storageYtdlp;
+    }
+  } catch (err: any) {
+    console.warn('⚠️ Tidak dapat mengunduh yt-dlp otomatis:', err.message);
+  }
+
+  cachedYtdlpPath = 'yt-dlp';
+  return 'yt-dlp';
+}
 
 // Antrean download aktif untuk menghindari download ganda file yang sama
 const activeDownloads = new Map<string, Promise<string>>();
 
 export class YoutubeService {
   /**
-   * Cari lagu di YouTube Music / YouTube secara cepat menggunakan yt-dlp
+   * Pencarian langsung YouTube via web scraping publik (Sangat cepat ~100ms, tanpa dependensi yt-dlp/python)
+   */
+  public static async searchDirectYouTube(query: string, limit: number = 10): Promise<YTSong[]> {
+    try {
+      const url = `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}&sp=EgIQAQ%253D%253D`;
+      const res = await fetch(url, {
+        headers: {
+          'User-Agent':
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          'Accept-Language': 'id-ID,id;q=0.9,en-US;q=0.8,en;q=0.7',
+        },
+      });
+
+      if (!res.ok) return [];
+
+      const html = await res.text();
+      const match = html.match(/var ytInitialData = ({.*?});<\/script>/s);
+      if (!match) return [];
+
+      const json = JSON.parse(match[1]);
+      const contents =
+        json.contents?.twoColumnSearchResultsRenderer?.primaryContents?.sectionListRenderer?.contents || [];
+      const results: YTSong[] = [];
+
+      for (const section of contents) {
+        const itemContents = section.itemSectionRenderer?.contents || [];
+        for (const item of itemContents) {
+          if (!item.videoRenderer) continue;
+          const v = item.videoRenderer;
+          const videoId = v.videoId;
+          if (!videoId) continue;
+
+          const rawTitle = v.title?.runs?.[0]?.text || 'Lagu';
+          const cleanTitle = rawTitle
+            .replace(/\(Official.*?\)/gi, '')
+            .replace(/\[Official.*?\]/gi, '')
+            .replace(/\(Lyric.*?\)/gi, '')
+            .replace(/\[Lyric.*?\]/gi, '')
+            .trim();
+
+          const artistName = v.ownerText?.runs?.[0]?.text || 'Artis YouTube';
+          let coverUrl = `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
+          if (Array.isArray(v.thumbnail?.thumbnails) && v.thumbnail.thumbnails.length > 0) {
+            coverUrl = v.thumbnail.thumbnails[v.thumbnail.thumbnails.length - 1].url || coverUrl;
+          }
+
+          // Parse durasi (misal "3:45" atau "1:15:30")
+          const durationText = v.lengthText?.simpleText || '3:30';
+          const parts = durationText.split(':').map(Number);
+          let durationSeconds = 210;
+          if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
+            durationSeconds = parts[0] * 60 + parts[1];
+          } else if (parts.length === 3 && !isNaN(parts[0]) && !isNaN(parts[1]) && !isNaN(parts[2])) {
+            durationSeconds = parts[0] * 3600 + parts[1] * 60 + parts[2];
+          }
+
+          const id = `yt_${videoId}`;
+          const songObj: YTSong = {
+            id,
+            title: cleanTitle,
+            artist_id: `yt_artist_${v.channelId || videoId}`,
+            artist_name: artistName,
+            album_id: null,
+            album_title: 'YouTube Track',
+            duration_seconds: durationSeconds,
+            cover_url: coverUrl,
+            play_count: 5000,
+            is_liked: false,
+            file_path: `${id}.m4a`,
+            mime_type: 'audio/mp4',
+            is_public: true,
+          };
+
+          inMemoryStore.songs.set(id, songObj);
+          inMemoryStore.artists.set(songObj.artist_id, {
+            id: songObj.artist_id,
+            name: artistName,
+            bio: `Channel resmi ${artistName}`,
+            image_url: coverUrl,
+          });
+
+          results.push(songObj);
+          if (results.length >= limit) break;
+        }
+        if (results.length >= limit) break;
+      }
+
+      return results;
+    } catch (err: any) {
+      console.warn('Pencarian langsung YouTube web gagal:', err.message);
+      return [];
+    }
+  }
+
+  /**
+   * Cari lagu di YouTube Music / YouTube (Mendukung Direct Web + Fallback yt-dlp)
    */
   public static async searchSongs(query: string, limit: number = 10): Promise<YTSong[]> {
+    // 1. Coba pencarian cepat via HTTP scraping langsung (instan, tanpa proses python berat)
+    const directResults = await YoutubeService.searchDirectYouTube(query, limit);
+    if (directResults.length > 0) {
+      return directResults;
+    }
+
+    // 2. Fallback: gunakan yt-dlp jika direct scraping tidak menemukan hasil
+    const ytdlpBin = await resolveYtdlpBinary();
     return new Promise((resolve) => {
       const searchParam = `ytsearch${limit}:${query}`;
       const args = [
@@ -44,7 +189,7 @@ export class YoutubeService {
         '--no-warnings',
       ];
 
-      const child = spawn(YTDLP_PATH, args);
+      const child = spawn(ytdlpBin, args);
       let stdoutData = '';
 
       child.stdout.on('data', (chunk) => {
@@ -53,7 +198,6 @@ export class YoutubeService {
 
       child.on('close', (code) => {
         if (code !== 0 && !stdoutData.trim()) {
-          console.warn(`Pencarian YouTube yt-dlp keluar dengan kode ${code}`);
           resolve([]);
           return;
         }
@@ -94,7 +238,6 @@ export class YoutubeService {
               is_public: true,
             };
 
-            // Simpan ke inMemoryStore agar rute /songs/:id langsung menemukannya
             inMemoryStore.songs.set(id, songObj);
             inMemoryStore.artists.set(songObj.artist_id, {
               id: songObj.artist_id,
@@ -141,6 +284,7 @@ export class YoutubeService {
     }
 
     // 3. Jalankan download instan audio 128-192kbps AAC
+    const ytdlpBin = await resolveYtdlpBinary();
     const downloadPromise = new Promise<string>((resolve, reject) => {
       console.log(`⬇️ Mengunduh audio YouTube asli untuk ID: ${rawId}...`);
       const url = `https://www.youtube.com/watch?v=${rawId}`;
@@ -152,7 +296,7 @@ export class YoutubeService {
         url,
       ];
 
-      const child = spawn(YTDLP_PATH, args);
+      const child = spawn(ytdlpBin, args);
 
       child.on('close', (code) => {
         activeDownloads.delete(songId);
@@ -181,11 +325,12 @@ export class YoutubeService {
    */
   public static async getSongMetadata(songId: string): Promise<YTSong | null> {
     const rawId = songId.replace(/^yt_/, '');
+    const ytdlpBin = await resolveYtdlpBinary();
     return new Promise((resolve) => {
       const url = `https://www.youtube.com/watch?v=${rawId}`;
       const args = [url, '--dump-json', '--no-playlist', '--no-warnings'];
 
-      const child = spawn(YTDLP_PATH, args);
+      const child = spawn(ytdlpBin, args);
       let stdoutData = '';
 
       child.stdout.on('data', (chunk) => {
@@ -247,6 +392,7 @@ export class YoutubeService {
       cleanUrl = `https://www.youtube.com/playlist?list=${cleanUrl}`;
     }
 
+    const ytdlpBin = await resolveYtdlpBinary();
     return new Promise((resolve) => {
       const args = [
         cleanUrl,
@@ -257,7 +403,7 @@ export class YoutubeService {
         '--playlist-end', String(limit),
       ];
 
-      const child = spawn(YTDLP_PATH, args);
+      const child = spawn(ytdlpBin, args);
       let stdoutData = '';
 
       child.stdout.on('data', (chunk) => {

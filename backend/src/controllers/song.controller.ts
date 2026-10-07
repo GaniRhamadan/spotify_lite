@@ -164,4 +164,117 @@ export class SongController {
       res.status(500).json({ success: false, message: 'Gagal memuat lagu trending' });
     }
   }
+
+  public static async getSongLyrics(req: Request, res: Response): Promise<void> {
+    try {
+      const id = req.params.id as string;
+      const titleQuery = ((req.query.title as string) || '').trim();
+      const artistQuery = ((req.query.artist as string) || '').trim();
+
+      // 1. Cek lirik di database lokal atau in-memory
+      let localLyrics = '';
+      if (getIsPostgresConnected()) {
+        const r = await pool.query('SELECT lyrics FROM songs WHERE id = $1', [id]);
+        if (r.rows.length > 0 && r.rows[0].lyrics) {
+          localLyrics = r.rows[0].lyrics;
+        }
+      } else {
+        const s = inMemoryStore.songs.get(id);
+        if (s && s.lyrics) localLyrics = s.lyrics;
+      }
+
+      if (localLyrics) {
+        res.status(200).json({
+          success: true,
+          data: {
+            lyrics: localLyrics,
+            syncedLyrics: localLyrics.includes('[00:') ? localLyrics : null,
+            source: 'local',
+          },
+        });
+        return;
+      }
+
+      // 2. Ambil judul dan nama artis untuk pencarian online LRCLIB
+      let targetTitle = titleQuery;
+      let targetArtist = artistQuery;
+
+      if (!targetTitle && id.startsWith('yt_')) {
+        const meta = await YoutubeService.getSongMetadata(id);
+        if (meta) {
+          targetTitle = meta.title;
+          targetArtist = meta.artist_name;
+        }
+      }
+
+      if (targetTitle) {
+        const cleanTitle = targetTitle
+          .replace(/\(Official.*?\)/gi, '')
+          .replace(/\[Official.*?\]/gi, '')
+          .replace(/\(Lyric.*?\)/gi, '')
+          .replace(/\[Lyric.*?\]/gi, '')
+          .replace(/\(Audio.*?\)/gi, '')
+          .replace(/\[Audio.*?\]/gi, '')
+          .trim();
+
+        // Cari via LRCLIB (Exact Match)
+        try {
+          const lrclibUrl = `https://lrclib.net/api/get?track_name=${encodeURIComponent(
+            cleanTitle
+          )}&artist_name=${encodeURIComponent(targetArtist || '')}`;
+          const lrcRes = await fetch(lrclibUrl, { headers: { 'User-Agent': 'SpotifyLite/1.0' } });
+          if (lrcRes.ok) {
+            const data: any = await lrcRes.json();
+            const synced = data.syncedLyrics || null;
+            const plain = data.plainLyrics || data.syncedLyrics || null;
+            if (plain || synced) {
+              res.status(200).json({
+                success: true,
+                data: {
+                  lyrics: plain,
+                  syncedLyrics: synced,
+                  source: 'lrclib',
+                },
+              });
+              return;
+            }
+          }
+        } catch {}
+
+        // Fallback: Cari via LRCLIB Search Query
+        try {
+          const searchUrl = `https://lrclib.net/api/search?q=${encodeURIComponent(
+            `${cleanTitle} ${targetArtist || ''}`.trim()
+          )}`;
+          const searchRes = await fetch(searchUrl, { headers: { 'User-Agent': 'SpotifyLite/1.0' } });
+          if (searchRes.ok) {
+            const list: any = await searchRes.json();
+            if (Array.isArray(list) && list.length > 0) {
+              const item = list[0];
+              res.status(200).json({
+                success: true,
+                data: {
+                  lyrics: item.plainLyrics || item.syncedLyrics,
+                  syncedLyrics: item.syncedLyrics || null,
+                  source: 'lrclib',
+                },
+              });
+              return;
+            }
+          }
+        } catch {}
+      }
+
+      res.status(200).json({
+        success: true,
+        data: {
+          lyrics: null,
+          syncedLyrics: null,
+          source: 'none',
+        },
+      });
+    } catch (error: any) {
+      res.status(500).json({ success: false, message: 'Gagal memuat lirik: ' + error.message });
+    }
+  }
 }
