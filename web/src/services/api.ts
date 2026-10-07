@@ -1,4 +1,4 @@
-export const API_BASE = 'http://localhost:5000/api/v1';
+export const API_BASE = 'https://spotify.sentinelofc.web.id/api/v1';
 
 export const getAuthToken = (): string | null => {
   return localStorage.getItem('spotify_token');

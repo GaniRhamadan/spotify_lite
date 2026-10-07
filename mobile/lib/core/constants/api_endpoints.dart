@@ -2,7 +2,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 class ApiEndpoints {
   // Default: Cloudflare Secure Tunnel (Aktif Online untuk Seluruh Jaringan 4G/5G/Wi-Fi)
-  static String baseUrl = 'https://receiver-yet-crafts-irc.trycloudflare.com/api/v1';
+  static String baseUrl = 'https://spotify.sentinelofc.web.id/api/v1';
 
   static const String keyCustomBaseUrl = 'custom_api_base_url';
 
