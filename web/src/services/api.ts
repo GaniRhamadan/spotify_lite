@@ -44,3 +44,7 @@ export async function apiRequest<T = any>(endpoint: string, options: RequestInit
 export const getStreamUrl = (songId: string): string => {
   return `${API_BASE}/songs/${songId}/stream`;
 };
+
+export const getApkDownloadUrl = (): string => {
+  return `${API_BASE}/download/apk`;
+};

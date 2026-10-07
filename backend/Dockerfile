@@ -23,6 +23,7 @@ RUN apk add --no-cache python3 curl ffmpeg && \
     chmod a+rx /usr/local/bin/yt-dlp
 
 COPY --from=builder /app/dist ./dist
+COPY public ./public
 
 # Folder penyimpanan audio dan sampul
 RUN mkdir -p storage/audio storage/covers

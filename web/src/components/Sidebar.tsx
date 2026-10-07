@@ -1,10 +1,12 @@
 import React from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
-import { Home, Search, Library, PlusSquare, Heart, Upload, LogOut, Music2 } from 'lucide-react';
+import { Home, Search, Library, PlusSquare, Heart, Upload, LogOut, Music2, Smartphone, Download } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { useDownload } from '../context/DownloadContext';
 
 export const Sidebar: React.FC = () => {
   const { user, logout } = useAuth();
+  const { openDownloadModal } = useDownload();
   const navigate = useNavigate();
 
   const handleLogout = async () => {
@@ -97,6 +99,29 @@ export const Sidebar: React.FC = () => {
               <span>Upload Musik (Admin)</span>
             </NavLink>
           )}
+        </div>
+
+        {/* Promo Download App Android */}
+        <div className="p-3.5 rounded-xl bg-gradient-to-b from-[#1b1b1b] to-[#121212] border border-white/5 relative overflow-hidden group">
+          <div className="flex items-center justify-between mb-1.5">
+            <span className="text-[11px] font-bold text-white flex items-center gap-1.5">
+              <Smartphone className="w-3.5 h-3.5 text-spotify-green" />
+              Spotify Lite App
+            </span>
+            <span className="text-[9px] bg-spotify-green/20 text-spotify-green font-bold px-1.5 py-0.5 rounded">
+              APK 55MB
+            </span>
+          </div>
+          <p className="text-[11px] text-spotify-subtext leading-snug mb-2.5">
+            Dengar musik di HP lebih ringan, cepat, & hemat kuota.
+          </p>
+          <button
+            onClick={openDownloadModal}
+            className="w-full py-1.5 px-3 rounded-lg bg-white/10 hover:bg-spotify-green hover:text-black text-white text-xs font-semibold flex items-center justify-center gap-1.5 transition-all shadow-sm"
+          >
+            <Download className="w-3.5 h-3.5" />
+            <span>Unduh Aplikasi</span>
+          </button>
         </div>
       </div>
 

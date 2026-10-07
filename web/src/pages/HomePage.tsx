@@ -3,8 +3,9 @@ import { apiRequest } from '../services/api';
 import { ISong, IPlaylist } from '../types';
 import { SongCard } from '../components/SongCard';
 import { Navbar } from '../components/Navbar';
-import { Play, Sparkles } from 'lucide-react';
+import { Play, Sparkles, Smartphone, Download, QrCode } from 'lucide-react';
 import { useAudio } from '../context/AudioContext';
+import { useDownload } from '../context/DownloadContext';
 import { useNavigate } from 'react-router-dom';
 
 export const HomePage: React.FC = () => {
@@ -15,6 +16,7 @@ export const HomePage: React.FC = () => {
   const [playlists, setPlaylists] = useState<IPlaylist[]>([]);
   const [greeting, setGreeting] = useState<string>('Selamat Datang');
   const { playSong } = useAudio();
+  const { openDownloadModal, downloadUrl } = useDownload();
   const navigate = useNavigate();
 
   const fetchRecommendations = async () => {
@@ -113,6 +115,46 @@ export const HomePage: React.FC = () => {
               </div>
             ))}
           </div>
+        </div>
+
+        {/* Banner Promo Download APK Mobile */}
+        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-[#0d3b1e] via-[#122b1c] to-[#121212] p-6 border border-spotify-green/20 shadow-xl">
+          <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-5">
+            <div className="space-y-2 max-w-xl">
+              <div className="flex items-center gap-2">
+                <span className="px-2.5 py-0.5 text-[10px] font-extrabold uppercase bg-spotify-green text-black rounded-full flex items-center gap-1">
+                  <Smartphone className="w-3 h-3 stroke-[2.5]" />
+                  Aplikasi Mobile Android
+                </span>
+                <span className="text-xs text-spotify-green font-medium">Bebas Iklan & Hemat Kuota</span>
+              </div>
+              <h2 className="text-2xl font-black text-white tracking-tight">
+                Dengarkan Musik Lebih Cepat di HP Android
+              </h2>
+              <p className="text-xs text-white/70 leading-relaxed">
+                Nikmati pemutar musik super ringan (~55 MB), lengkap dengan lirik lagu karaoke, mode video, dan putar musik offline tanpa buffering.
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-3 shrink-0">
+              <a
+                href={downloadUrl}
+                download="SpotifyLite-Release.apk"
+                className="px-5 py-3 rounded-full bg-spotify-green hover:bg-[#1ed760] text-black font-bold text-xs uppercase tracking-wider flex items-center gap-2 shadow-lg shadow-spotify-green/25 hover:scale-105 active:scale-95 transition-all"
+              >
+                <Download className="w-4 h-4 stroke-[2.5]" />
+                <span>Unduh APK (55 MB)</span>
+              </a>
+              <button
+                type="button"
+                onClick={openDownloadModal}
+                className="px-4 py-3 rounded-full bg-white/10 hover:bg-white/20 text-white font-semibold text-xs flex items-center gap-2 border border-white/10 transition-all hover:scale-105 active:scale-95"
+              >
+                <QrCode className="w-4 h-4 text-spotify-green" />
+                <span>Scan QR / Panduan</span>
+              </button>
+            </div>
+          </div>
+          <div className="absolute -right-10 -bottom-10 w-64 h-64 bg-spotify-green/10 rounded-full blur-3xl pointer-events-none" />
         </div>
 
         {/* Section: Trending & Terpopuler */}

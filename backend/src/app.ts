@@ -68,18 +68,51 @@ export const createApp = (): Application => {
   });
 
   // Endpoint Download APK Release Langsung ke HP
-  app.get('/download/spotify-lite.apk', (_req, res) => {
+  const handleApkDownload = (_req: express.Request, res: express.Response) => {
     const candidatePaths = [
       path.resolve(__dirname, '../../mobile/build/app/outputs/flutter-apk/app-release.apk'),
       path.resolve(__dirname, '../public/spotify-lite.apk'),
+      path.resolve(__dirname, '../../backend/public/spotify-lite.apk'),
       path.resolve(process.cwd(), 'public/spotify-lite.apk'),
+      path.resolve(process.cwd(), 'backend/public/spotify-lite.apk'),
+      '/app/public/spotify-lite.apk',
+      '/home/gani/spotify_lite/backend/public/spotify-lite.apk',
+      '/home/gani/spotify_lite/mobile/build/app/outputs/flutter-apk/app-release.apk',
     ];
     const apkPath = candidatePaths.find((p) => fs.existsSync(p));
     if (apkPath) {
+      res.setHeader('Content-Type', 'application/vnd.android.package-archive');
+      res.setHeader('Content-Disposition', 'attachment; filename="SpotifyLite-Release.apk"');
       res.download(apkPath, 'SpotifyLite-Release.apk');
     } else {
-      res.status(404).send('Berkas APK belum siap.');
+      res.status(404).json({ success: false, message: 'Berkas APK belum siap atau sedang diperbarui.' });
     }
+  };
+
+  app.get('/download/spotify-lite.apk', handleApkDownload);
+  app.get('/download/apk', handleApkDownload);
+  app.get('/api/v1/download/apk', handleApkDownload);
+  app.get('/api/v1/download/spotify-lite.apk', handleApkDownload);
+
+  app.get('/api/v1/download/info', (_req, res) => {
+    res.json({
+      success: true,
+      data: {
+        appName: 'Spotify Lite',
+        version: '1.0.0',
+        platform: 'Android',
+        fileSizeMb: 55,
+        downloadUrl: '/api/v1/download/apk',
+        fileName: 'SpotifyLite-Release.apk',
+        features: [
+          'Ringan & Super Cepat (55 MB)',
+          'Hemat Kuota & Baterai',
+          'Lirik Karaoke & Mode Video Musik',
+          'Dukungan Server VPS 24 Jam Online',
+          'Download & Putar Musik Offline'
+        ]
+      }
+    });
   });
 
   // Registrasi Seluruh Rute API v1

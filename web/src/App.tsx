@@ -2,9 +2,11 @@ import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import { AudioProvider } from './context/AudioContext';
+import { DownloadProvider } from './context/DownloadContext';
 import { Sidebar } from './components/Sidebar';
 import { BottomPlayer } from './components/BottomPlayer';
 import { FullscreenPlayer } from './components/FullscreenPlayer';
+import { DownloadAppModal } from './components/DownloadAppModal';
 import { HomePage } from './pages/HomePage';
 import { SearchPage } from './pages/SearchPage';
 import { LibraryPage } from './pages/LibraryPage';
@@ -29,6 +31,9 @@ function MainLayout({ children }: { children: React.ReactNode }) {
 
       {/* 3. Modal Layar Penuh Pemutar */}
       <FullscreenPlayer />
+
+      {/* 4. Modal Download APK Mobile */}
+      <DownloadAppModal />
     </div>
   );
 }
@@ -37,7 +42,8 @@ export function App() {
   return (
     <AuthProvider>
       <AudioProvider>
-        <BrowserRouter>
+        <DownloadProvider>
+          <BrowserRouter>
           <Routes>
             <Route path="/login" element={<LoginPage />} />
             <Route
@@ -91,6 +97,7 @@ export function App() {
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </BrowserRouter>
+        </DownloadProvider>
       </AudioProvider>
     </AuthProvider>
   );
