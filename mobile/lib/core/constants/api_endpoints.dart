@@ -1,23 +1,23 @@
 import 'package:shared_preferences/shared_preferences.dart';
 
 class ApiEndpoints {
-  // Default: Cloudflare Secure Tunnel (Aktif Online untuk Seluruh Jaringan 4G/5G/Wi-Fi)
+  // Default: Server VPS Pribadi (Aktif Online 24 Jam untuk Seluruh Jaringan 4G/5G/Wi-Fi)
   static String baseUrl = 'https://spotify.sentinelofc.web.id/api/v1';
 
   static const String keyCustomBaseUrl = 'custom_api_base_url';
 
   static const List<Map<String, String>> presets = [
     {
-      'label': 'Cloudflare Tunnel Publik (Online 4G/5G/Wi-Fi)',
-      'url': 'https://receiver-yet-crafts-irc.trycloudflare.com/api/v1',
-    },
-    {
-      'label': 'Wi-Fi LAN Laptop (192.168.1.22)',
-      'url': 'http://192.168.1.22:5000/api/v1',
+      'label': 'Server VPS Resmi (Online 24 Jam)',
+      'url': 'https://spotify.sentinelofc.web.id/api/v1',
     },
     {
       'label': 'Localhost / Termux di HP (127.0.0.1)',
       'url': 'http://127.0.0.1:5000/api/v1',
+    },
+    {
+      'label': 'Wi-Fi LAN Laptop (192.168.1.22)',
+      'url': 'http://192.168.1.22:5000/api/v1',
     },
   ];
 
