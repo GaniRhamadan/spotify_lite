@@ -2,6 +2,8 @@ import { Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import { pool, getIsPostgresConnected, inMemoryStore } from '../config/database';
 import { AuthenticatedRequest } from '../middlewares/auth.middleware';
+import { YoutubeService, YTSong } from '../services/youtube.service';
+import { SpotifyService } from '../services/spotify.service';
 
 export class UserController {
   public static async toggleLikeSong(req: AuthenticatedRequest, res: Response): Promise<void> {
@@ -86,6 +88,105 @@ export class UserController {
       }
     } catch (error: any) {
       res.status(500).json({ success: false, message: 'Gagal memuat lagu yang disukai' });
+    }
+  }
+
+  public static async importLikedSongs(req: AuthenticatedRequest, res: Response): Promise<void> {
+    try {
+      const userId = req.user?.userId;
+      if (!userId) {
+        res.status(401).json({ success: false, message: 'Harus login terlebih dahulu' });
+        return;
+      }
+
+      const { playlistUrl, tracks, rawText, isPreview } = req.body;
+      let resolvedSongs: YTSong[] = [];
+
+      // 1. Jika pengguna memasukkan URL (Spotify atau YouTube)
+      if (playlistUrl && typeof playlistUrl === 'string' && playlistUrl.trim()) {
+        const cleanUrl = playlistUrl.trim();
+        if (cleanUrl.includes('spotify.com') || cleanUrl.includes('spotify.link')) {
+          const spotifyData = await SpotifyService.extractSpotifyTracks(cleanUrl);
+          const itemsToProcess = spotifyData.tracks.slice(0, 50);
+          for (const item of itemsToProcess) {
+            const query = `${item.title} ${item.artist}`.trim();
+            if (query) {
+              const song = await YoutubeService.resolveSingleSong(query);
+              if (song && !resolvedSongs.some(s => s.id === song.id)) {
+                resolvedSongs.push(song);
+              }
+            }
+          }
+        } else {
+          resolvedSongs = await YoutubeService.getPlaylistSongs(cleanUrl, 200);
+        }
+      } 
+      // 2. Jika pengguna mengirimkan list objek tracks (dari file JSON / CSV ekstensi)
+      else if (Array.isArray(tracks) && tracks.length > 0) {
+        const itemsToProcess = tracks.slice(0, 50);
+        for (const item of itemsToProcess) {
+          const query =
+            item.youtubeUrl ||
+            item.id ||
+            `${item.title || item.name || ''} ${item.artist || item.artist_name || ''}`.trim();
+          if (query) {
+            const song = await YoutubeService.resolveSingleSong(query);
+            if (song && !resolvedSongs.some(s => s.id === song.id)) {
+              resolvedSongs.push(song);
+            }
+          }
+        }
+      } 
+      // 3. Jika pengguna menempelkan teks mentah (baris per baris)
+      else if (rawText && typeof rawText === 'string' && rawText.trim()) {
+        const lines = rawText.split('\n').map(l => l.trim()).filter(Boolean).slice(0, 50);
+        for (const line of lines) {
+          const song = await YoutubeService.resolveSingleSong(line);
+          if (song && !resolvedSongs.some(s => s.id === song.id)) {
+            resolvedSongs.push(song);
+          }
+        }
+      } else {
+        res.status(400).json({ success: false, message: 'Harap sertakan playlistUrl, tracks, atau rawText' });
+        return;
+      }
+
+      // Jika hanya mode pratinjau (preview), jangan simpan ke liked_songs
+      if (isPreview) {
+        res.status(200).json({
+          success: true,
+          message: `Berhasil mendeteksi ${resolvedSongs.length} lagu`,
+          count: resolvedSongs.length,
+          data: resolvedSongs,
+        });
+        return;
+      }
+
+      // Simpan seluruh lagu ke koleksi Disukai pengguna
+      for (const song of resolvedSongs) {
+        if (getIsPostgresConnected()) {
+          try {
+            await pool.query(
+              'INSERT INTO liked_songs (user_id, song_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
+              [userId, song.id]
+            );
+          } catch (e) {
+            // Abaikan duplikat
+          }
+        } else {
+          inMemoryStore.liked_songs.add(`${userId}:${song.id}`);
+        }
+      }
+
+      res.status(200).json({
+        success: true,
+        message: `Berhasil menambahkan ${resolvedSongs.length} lagu ke Lagu yang Disukai!`,
+        count: resolvedSongs.length,
+        data: resolvedSongs,
+      });
+    } catch (error: any) {
+      console.error('Error saat import liked songs:', error);
+      res.status(500).json({ success: false, message: 'Gagal mengimpor lagu: ' + error.message });
     }
   }
 

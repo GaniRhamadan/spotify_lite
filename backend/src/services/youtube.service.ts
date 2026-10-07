@@ -237,4 +237,121 @@ export class YoutubeService {
       child.on('error', () => resolve(null));
     });
   }
+
+  /**
+   * Ekstrak seluruh daftar lagu dari link Playlist YouTube / YouTube Music
+   */
+  public static async getPlaylistSongs(playlistUrlOrId: string, limit: number = 200): Promise<YTSong[]> {
+    let cleanUrl = playlistUrlOrId.trim();
+    if (cleanUrl.startsWith('PL') || cleanUrl.startsWith('OLAK5uy_') || cleanUrl.startsWith('RD')) {
+      cleanUrl = `https://www.youtube.com/playlist?list=${cleanUrl}`;
+    }
+
+    return new Promise((resolve) => {
+      const args = [
+        cleanUrl,
+        '--dump-json',
+        '--flat-playlist',
+        '--no-warnings',
+        '--ignore-errors',
+        '--playlist-end', String(limit),
+      ];
+
+      const child = spawn(YTDLP_PATH, args);
+      let stdoutData = '';
+
+      child.stdout.on('data', (chunk) => {
+        stdoutData += chunk.toString();
+      });
+
+      child.on('close', (code) => {
+        const lines = stdoutData.trim().split('\n');
+        const results: YTSong[] = [];
+
+        for (const line of lines) {
+          if (!line.trim()) continue;
+          try {
+            const data = JSON.parse(line.trim());
+            if (!data.id) continue;
+            const id = `yt_${data.id}`;
+            const cleanTitle = (data.title || 'Lagu')
+              .replace(/\(Official.*?\)/gi, '')
+              .replace(/\[Official.*?\]/gi, '')
+              .replace(/\(Lyric.*?\)/gi, '')
+              .replace(/\[Lyric.*?\]/gi, '')
+              .trim();
+
+            const artistName =
+              data.channel ||
+              data.uploader ||
+              (Array.isArray(data.creators) ? data.creators.join(', ') : 'Artis YouTube');
+
+            let coverUrl = `https://i.ytimg.com/vi/${data.id}/hqdefault.jpg`;
+            if (Array.isArray(data.thumbnails) && data.thumbnails.length > 0) {
+              coverUrl = data.thumbnails[data.thumbnails.length - 1].url || coverUrl;
+            }
+
+            const songObj: YTSong = {
+              id,
+              title: cleanTitle,
+              artist_id: `yt_artist_${data.channel_id || data.id}`,
+              artist_name: artistName,
+              album_id: null,
+              album_title: data.playlist_title || 'YouTube Playlist Track',
+              duration_seconds: Math.round(data.duration || 180),
+              cover_url: coverUrl,
+              play_count: data.view_count || 1000,
+              is_liked: false,
+              file_path: `${id}.m4a`,
+              mime_type: 'audio/mp4',
+              is_public: true,
+            };
+
+            inMemoryStore.songs.set(id, songObj);
+            inMemoryStore.artists.set(songObj.artist_id, {
+              id: songObj.artist_id,
+              name: artistName,
+              bio: `Channel ${artistName}`,
+              image_url: coverUrl,
+            });
+
+            results.push(songObj);
+          } catch (e) {
+            // Ignore parse errors on individual lines
+          }
+        }
+
+        resolve(results);
+      });
+
+      child.on('error', (err) => {
+        console.error('Error saat mengambil playlist yt-dlp:', err);
+        resolve([]);
+      });
+    });
+  }
+
+  /**
+   * Menyelesaikan 1 item: bisa berupa URL video YouTube, YouTube ID, atau judul lagu teks
+   */
+  public static async resolveSingleSong(queryOrUrl: string): Promise<YTSong | null> {
+    const trimmed = queryOrUrl.trim();
+    if (!trimmed) return null;
+
+    // 1. Cek apakah format URL YouTube
+    const ytMatch = trimmed.match(/(?:youtu\.be\/|v=|\/embed\/|\/v\/|shorts\/)([a-zA-Z0-9_-]{11})/);
+    if (ytMatch) {
+      return YoutubeService.getSongMetadata(`yt_${ytMatch[1]}`);
+    }
+
+    // 2. Cek apakah format ID yt_...
+    if (trimmed.startsWith('yt_')) {
+      return YoutubeService.getSongMetadata(trimmed);
+    }
+
+    // 3. Pencarian judul lagu via searchSongs
+    const searchRes = await YoutubeService.searchSongs(trimmed, 1);
+    return searchRes[0] || null;
+  }
 }
+

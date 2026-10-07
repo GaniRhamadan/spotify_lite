@@ -3,6 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.SongController = void 0;
 const database_1 = require("../config/database");
 const cache_service_1 = require("../services/cache.service");
+const youtube_service_1 = require("../services/youtube.service");
 class SongController {
     static async getAllSongs(req, res) {
         try {
@@ -100,7 +101,10 @@ class SongController {
                 res.status(200).json({ success: true, data: result.rows[0] });
             }
             else {
-                const song = database_1.inMemoryStore.songs.get(id);
+                let song = database_1.inMemoryStore.songs.get(id);
+                if (!song && id.startsWith('yt_')) {
+                    song = await youtube_service_1.YoutubeService.getSongMetadata(id);
+                }
                 if (!song) {
                     res.status(404).json({ success: false, message: 'Lagu tidak ditemukan' });
                     return;

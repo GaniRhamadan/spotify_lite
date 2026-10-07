@@ -8,11 +8,27 @@ const path_1 = __importDefault(require("path"));
 const fs_1 = __importDefault(require("fs"));
 const database_1 = require("../config/database");
 const audio_service_1 = require("../services/audio.service");
+const youtube_service_1 = require("../services/youtube.service");
 const env_1 = require("../config/env");
 class StreamController {
     static async streamSong(req, res) {
         try {
             const id = req.params.id;
+            // 1. Dukungan lagu live YouTube Music
+            if (id.startsWith('yt_')) {
+                try {
+                    const filePath = await youtube_service_1.YoutubeService.ensureAudioFile(id);
+                    audio_service_1.AudioService.streamAudioFile(req, res, filePath, 'audio/mp4');
+                    return;
+                }
+                catch (e) {
+                    console.error('Gagal stream audio YouTube:', e);
+                    if (!res.headersSent) {
+                        res.status(500).json({ success: false, message: 'Gagal mengunduh audio YouTube: ' + e.message });
+                    }
+                    return;
+                }
+            }
             let song = null;
             if ((0, database_1.getIsPostgresConnected)()) {
                 const query = 'SELECT id, file_path, mime_type FROM songs WHERE id = $1';

@@ -9,6 +9,7 @@ const cors_1 = __importDefault(require("cors"));
 const helmet_1 = __importDefault(require("helmet"));
 const express_rate_limit_1 = __importDefault(require("express-rate-limit"));
 const path_1 = __importDefault(require("path"));
+const fs_1 = __importDefault(require("fs"));
 const env_1 = require("./config/env");
 const auth_routes_1 = __importDefault(require("./routes/auth.routes"));
 const song_routes_1 = __importDefault(require("./routes/song.routes"));
@@ -56,6 +57,16 @@ const createApp = () => {
             timestamp: new Date().toISOString(),
             service: 'Spotify Lite API Service',
         });
+    });
+    // Endpoint Download APK Release Langsung ke HP
+    app.get('/download/spotify-lite.apk', (_req, res) => {
+        const apkPath = path_1.default.resolve(__dirname, '../../mobile/build/app/outputs/flutter-apk/app-release.apk');
+        if (fs_1.default.existsSync(apkPath)) {
+            res.download(apkPath, 'SpotifyLite-Release.apk');
+        }
+        else {
+            res.status(404).send('Berkas APK belum siap.');
+        }
     });
     // Registrasi Seluruh Rute API v1
     app.use('/api/v1/auth', auth_routes_1.default);

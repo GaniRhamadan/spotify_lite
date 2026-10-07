@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import { Heart, Plus, Music, Play, Trash2, Clock } from 'lucide-react';
+import { Heart, Plus, Music, Play, Trash2, Clock, Sparkles } from 'lucide-react';
 import { apiRequest } from '../services/api';
 import { ISong, IPlaylist } from '../types';
 import { Navbar } from '../components/Navbar';
+import { ImportLikedModal } from '../components/ImportLikedModal';
 import { useAudio } from '../context/AudioContext';
 import { useAuth } from '../context/AuthContext';
 
@@ -24,11 +25,12 @@ export const LibraryPage: React.FC = () => {
   const [playlists, setPlaylists] = useState<IPlaylist[]>([]);
   const [history, setHistory] = useState<ISong[]>([]);
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
+  const [isImportModalOpen, setIsImportModalOpen] = useState<boolean>(false);
   const [newTitle, setNewTitle] = useState<string>('');
   const [newDesc, setNewDesc] = useState<string>('');
 
   const { playSong } = useAudio();
-  const { user } = useAuth();
+  const { user, login } = useAuth();
   const navigate = useNavigate();
 
   const loadData = async () => {
@@ -80,12 +82,20 @@ export const LibraryPage: React.FC = () => {
         <div className="flex flex-col items-center justify-center h-[70vh] gap-4">
           <Music className="w-16 h-16 text-spotify-subtext" />
           <h2 className="text-2xl font-bold text-white">Masuk untuk melihat koleksi musik Anda</h2>
-          <button
-            onClick={() => navigate('/login')}
-            className="px-8 py-3 rounded-full bg-white text-black font-bold text-sm hover:scale-105 transition-transform"
-          >
-            Masuk Sekarang
-          </button>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => navigate('/login')}
+              className="px-8 py-3 rounded-full bg-white text-black font-bold text-sm hover:scale-105 transition-transform"
+            >
+              Masuk Sekarang
+            </button>
+            <button
+              onClick={() => login('user@spotifylite.com', 'user123')}
+              className="px-6 py-3 rounded-full bg-[#242424] text-white border border-white/20 font-bold text-sm hover:bg-[#333] transition-colors"
+            >
+              ⚡ Masuk Cepat (Akun Demo)
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -98,15 +108,26 @@ export const LibraryPage: React.FC = () => {
       <main className="px-8 py-6 space-y-6">
         <div className="flex items-center justify-between">
           <h1 className="text-3xl font-extrabold text-white tracking-tight">Koleksi Kamu</h1>
-          {activeTab === 'playlists' && (
-            <button
-              onClick={() => setIsModalOpen(true)}
-              className="flex items-center gap-x-2 px-4 py-2 rounded-full bg-spotify-green text-black font-bold text-xs hover:scale-105 transition-all shadow-md"
-            >
-              <Plus className="w-4 h-4" />
-              <span>Buat Playlist</span>
-            </button>
-          )}
+          <div className="flex items-center gap-2">
+            {activeTab === 'liked' && (
+              <button
+                onClick={() => setIsImportModalOpen(true)}
+                className="flex items-center gap-x-2 px-4 py-2 rounded-full bg-spotify-green text-black font-bold text-xs hover:scale-105 transition-all shadow-md"
+              >
+                <Sparkles className="w-4 h-4 fill-black stroke-black" />
+                <span>Import Lagu (Spotify / YouTube)</span>
+              </button>
+            )}
+            {activeTab === 'playlists' && (
+              <button
+                onClick={() => setIsModalOpen(true)}
+                className="flex items-center gap-x-2 px-4 py-2 rounded-full bg-spotify-green text-black font-bold text-xs hover:scale-105 transition-all shadow-md"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Buat Playlist</span>
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Tab Buttons */}
@@ -185,9 +206,16 @@ export const LibraryPage: React.FC = () => {
               <div className="text-center py-16">
                 <Heart className="w-12 h-12 mx-auto text-spotify-subtext mb-3" />
                 <p className="text-base font-semibold text-white">Belum ada lagu yang disukai</p>
-                <p className="text-xs text-spotify-subtext mt-1">
-                  Tekan ikon hati pada lagu yang Anda suka untuk menyimpannya di sini.
+                <p className="text-xs text-spotify-subtext mt-1 max-w-sm mx-auto">
+                  Tekan ikon hati pada lagu yang Anda suka, atau import semua lagu dari playlist YouTube hasil transfer ekstensi Spotify Anda.
                 </p>
+                <button
+                  onClick={() => setIsImportModalOpen(true)}
+                  className="mt-5 inline-flex items-center gap-2 px-6 py-2.5 rounded-full bg-spotify-green text-black font-bold text-xs hover:scale-105 transition-all shadow-lg"
+                >
+                  <Sparkles className="w-4 h-4 fill-black stroke-black" />
+                  <span>Import Playlist Lagu Sekarang</span>
+                </button>
               </div>
             )}
           </div>
@@ -302,6 +330,13 @@ export const LibraryPage: React.FC = () => {
           </form>
         </div>
       )}
+
+      {/* Modal Import Lagu dari Spotify / YouTube */}
+      <ImportLikedModal
+        isOpen={isImportModalOpen}
+        onClose={() => setIsImportModalOpen(false)}
+        onSuccess={loadData}
+      />
     </div>
   );
 };

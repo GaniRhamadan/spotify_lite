@@ -5,6 +5,7 @@ import { authenticateJWT } from '../middlewares/auth.middleware';
 const router = Router();
 
 // Liked Songs
+router.post('/likes/import', authenticateJWT, UserController.importLikedSongs);
 router.post('/likes/:songId', authenticateJWT, UserController.toggleLikeSong);
 router.get('/likes', authenticateJWT, UserController.getLikedSongs);
 
