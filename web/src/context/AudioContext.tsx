@@ -16,6 +16,8 @@ interface AudioContextType {
   queue: ISong[];
   queueIndex: number;
   isFullscreenOpen: boolean;
+  fullscreenTab: 'cover' | 'video' | 'lyrics' | 'queue';
+  setFullscreenTab: (tab: 'cover' | 'video' | 'lyrics' | 'queue') => void;
   playSong: (song: ISong, newQueue?: ISong[]) => void;
   togglePlayPause: () => void;
   nextSong: () => void;
@@ -43,6 +45,7 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [queue, setQueue] = useState<ISong[]>([]);
   const [queueIndex, setQueueIndex] = useState<number>(0);
   const [isFullscreenOpen, setIsFullscreenOpen] = useState<boolean>(false);
+  const [fullscreenTab, setFullscreenTab] = useState<'cover' | 'video' | 'lyrics' | 'queue'>('cover');
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const hasRecordedHistoryRef = useRef<boolean>(false);
@@ -132,6 +135,18 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const playSong = (song: ISong, newQueue?: ISong[]) => {
     hasRecordedHistoryRef.current = false;
     let targetQueue = queue;
+
+    // Algoritma Rekomendasi: Catat frekuensi artis yang sering didengarkan user
+    try {
+      const artistName = (song.artist_name || '').trim();
+      if (artistName && artistName !== 'Artis' && artistName !== 'Artis Tidak Diketahui') {
+        const stored = JSON.parse(localStorage.getItem('listening_habits') || '{"artists":{}}');
+        if (!stored.artists) stored.artists = {};
+        stored.artists[artistName] = (stored.artists[artistName] || 0) + 1;
+        localStorage.setItem('listening_habits', JSON.stringify(stored));
+        window.dispatchEvent(new CustomEvent('listening_habits_updated'));
+      }
+    } catch {}
 
     if (newQueue && newQueue.length > 0) {
       targetQueue = newQueue;
@@ -264,6 +279,8 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         queue,
         queueIndex,
         isFullscreenOpen,
+        fullscreenTab,
+        setFullscreenTab,
         playSong,
         togglePlayPause,
         nextSong,

@@ -12,8 +12,11 @@ import {
   Maximize2,
   Heart,
   ListMusic,
+  Video,
+  FileText,
 } from 'lucide-react';
 import { useAudio } from '../context/AudioContext';
+import { useNavigate } from 'react-router-dom';
 
 function formatTime(seconds: number): string {
   if (isNaN(seconds) || seconds <= 0) return '0:00';
@@ -23,6 +26,7 @@ function formatTime(seconds: number): string {
 }
 
 export const BottomPlayer: React.FC = () => {
+  const navigate = useNavigate();
   const {
     currentSong,
     isPlaying,
@@ -42,12 +46,13 @@ export const BottomPlayer: React.FC = () => {
     toggleRepeat,
     toggleLikeCurrentSong,
     setIsFullscreenOpen,
+    setFullscreenTab,
   } = useAudio();
 
   if (!currentSong) return null;
 
   return (
-    <footer className="h-20 bg-black border-t border-[#222] px-4 flex items-center justify-between z-40 select-none">
+    <footer className="h-20 md:h-[84px] w-full bg-black border-t border-[#1e1e1e] px-4 flex items-center justify-between z-40 select-none shrink-0">
       {/* 1. KIRI: Info Lagu Saat Ini */}
       <div className="flex items-center gap-x-3 w-1/4 min-w-[180px]">
         <img
@@ -63,7 +68,17 @@ export const BottomPlayer: React.FC = () => {
           >
             {currentSong.title}
           </span>
-          <span className="text-xs text-spotify-subtext truncate hover:underline cursor-pointer">
+          <span
+            onClick={(e) => {
+              e.stopPropagation();
+              const artistTarget = currentSong.artist_name || currentSong.artist_id;
+              if (artistTarget) {
+                navigate(`/artist/${encodeURIComponent(artistTarget)}`);
+              }
+            }}
+            className="text-xs text-spotify-subtext truncate hover:underline hover:text-white cursor-pointer"
+            title={`Lihat karya ${currentSong.artist_name || 'Artis'}`}
+          >
             {currentSong.artist_name || 'Artis'}
           </span>
         </div>
@@ -148,13 +163,40 @@ export const BottomPlayer: React.FC = () => {
         </div>
       </div>
 
-      {/* 3. KANAN: Antrean, Volume, Layar Penuh */}
+      {/* 3. KANAN: Video, Lirik, Antrean, Volume, Layar Penuh */}
       <div className="flex items-center justify-end gap-x-3 w-1/4">
+        {/* Mode Video YouTube Music */}
+        <button
+          onClick={() => {
+            setFullscreenTab('video');
+            setIsFullscreenOpen(true);
+          }}
+          className="text-spotify-subtext hover:text-red-400 transition-colors"
+          title="Tonton Video Musik (Mode YouTube)"
+        >
+          <Video className="w-4 h-4" />
+        </button>
+
+        {/* Lirik Lagu */}
+        <button
+          onClick={() => {
+            setFullscreenTab('lyrics');
+            setIsFullscreenOpen(true);
+          }}
+          className="text-spotify-subtext hover:text-spotify-green transition-colors"
+          title="Lirik Lagu (Karaoke Sync)"
+        >
+          <FileText className="w-4 h-4" />
+        </button>
+
         {/* Antrean / Now Playing Fullscreen */}
         <button
-          onClick={() => setIsFullscreenOpen(true)}
+          onClick={() => {
+            setFullscreenTab('queue');
+            setIsFullscreenOpen(true);
+          }}
           className="text-spotify-subtext hover:text-white transition-colors"
-          title="Buka Layar Pemutar Lengkap"
+          title="Buka Antrean Lagu"
         >
           <ListMusic className="w-4 h-4" />
         </button>

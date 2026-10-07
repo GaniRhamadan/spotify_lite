@@ -1,4 +1,5 @@
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Play, Pause } from 'lucide-react';
 import { ISong } from '../types';
 import { useAudio } from '../context/AudioContext';
@@ -9,6 +10,7 @@ interface SongCardProps {
 }
 
 export const SongCard: React.FC<SongCardProps> = ({ song, playlist }) => {
+  const navigate = useNavigate();
   const { currentSong, isPlaying, playSong, togglePlayPause } = useAudio();
 
   const isCurrent = currentSong?.id === song.id;
@@ -62,7 +64,17 @@ export const SongCard: React.FC<SongCardProps> = ({ song, playlist }) => {
         >
           {song.title}
         </h4>
-        <p className="text-xs text-spotify-subtext truncate mt-1">
+        <p
+          onClick={(e) => {
+            e.stopPropagation();
+            const artistTarget = song.artist_name || song.artist_id;
+            if (artistTarget) {
+              navigate(`/artist/${encodeURIComponent(artistTarget)}`);
+            }
+          }}
+          className="text-xs text-spotify-subtext truncate mt-1 hover:underline hover:text-white cursor-pointer"
+          title={`Lihat karya ${song.artist_name || 'Artis'}`}
+        >
           {song.artist_name || 'Artis Tidak Diketahui'}
         </p>
       </div>

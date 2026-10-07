@@ -3,17 +3,48 @@ import { apiRequest } from '../services/api';
 import { ISong, IPlaylist } from '../types';
 import { SongCard } from '../components/SongCard';
 import { Navbar } from '../components/Navbar';
-import { Play } from 'lucide-react';
+import { Play, Sparkles } from 'lucide-react';
 import { useAudio } from '../context/AudioContext';
 import { useNavigate } from 'react-router-dom';
 
 export const HomePage: React.FC = () => {
   const [songs, setSongs] = useState<ISong[]>([]);
   const [trending, setTrending] = useState<ISong[]>([]);
+  const [recommendations, setRecommendations] = useState<ISong[]>([]);
+  const [recBasis, setRecBasis] = useState<string>('Pop');
   const [playlists, setPlaylists] = useState<IPlaylist[]>([]);
   const [greeting, setGreeting] = useState<string>('Selamat Datang');
   const { playSong } = useAudio();
   const navigate = useNavigate();
+
+  const fetchRecommendations = async () => {
+    try {
+      let seed = 'Pop';
+      let isArtist = false;
+      try {
+        const stored = JSON.parse(localStorage.getItem('listening_habits') || '{"artists":{}}');
+        const artistKeys = Object.keys(stored.artists || {});
+        if (artistKeys.length > 0) {
+          const top = artistKeys.reduce((a, b) => (stored.artists[a] > stored.artists[b] ? a : b));
+          if (top) {
+            seed = top;
+            isArtist = true;
+          }
+        }
+      } catch {}
+
+      setRecBasis(seed);
+      const query = isArtist
+        ? `seed_artist=${encodeURIComponent(seed)}`
+        : `seed_genre=${encodeURIComponent(seed)}`;
+      const res = await apiRequest(`/songs/recommendations?${query}&limit=10`);
+      if (res.success && Array.isArray(res.data) && res.data.length > 0) {
+        setRecommendations(res.data);
+      }
+    } catch (err) {
+      console.warn('Gagal memuat rekomendasi personal:', err);
+    }
+  };
 
   useEffect(() => {
     const hour = new Date().getHours();
@@ -39,6 +70,16 @@ export const HomePage: React.FC = () => {
     };
 
     fetchData();
+    fetchRecommendations();
+
+    const handleHabitsUpdated = () => {
+      fetchRecommendations();
+    };
+
+    window.addEventListener('listening_habits_updated', handleHabitsUpdated);
+    return () => {
+      window.removeEventListener('listening_habits_updated', handleHabitsUpdated);
+    };
   }, []);
 
   return (
@@ -85,6 +126,36 @@ export const HomePage: React.FC = () => {
             ))}
           </div>
         </div>
+
+        {/* Section Algoritma Personal: Dibuat Untuk Kamu */}
+        {recommendations.length > 0 && (
+          <div className="p-6 rounded-2xl bg-gradient-to-r from-[#1f1633] via-[#161f28] to-[#121212] border border-white/10 shadow-xl">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-5">
+              <div className="flex items-center gap-x-2.5">
+                <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-purple-500 to-pink-500 flex items-center justify-center shadow">
+                  <Sparkles className="w-4 h-4 text-white" />
+                </div>
+                <div>
+                  <h2 className="text-xl font-bold text-white tracking-tight">Dibuat Untuk Kamu</h2>
+                  <p className="text-xs text-spotify-subtext">
+                    Algoritma rekomendasi berdasarkan kesukaanmu mendengarkan{' '}
+                    <span className="text-spotify-green font-semibold underline underline-offset-2">
+                      {recBasis}
+                    </span>
+                  </p>
+                </div>
+              </div>
+              <span className="text-[11px] font-semibold tracking-wider uppercase px-2.5 py-1 rounded-full bg-white/10 text-white/90 border border-white/10 w-fit">
+                Algoritma Cerdas
+              </span>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+              {recommendations.map((song) => (
+                <SongCard key={song.id} song={song} playlist={recommendations} />
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Section: Playlist Unggulan */}
         {playlists.length > 0 && (

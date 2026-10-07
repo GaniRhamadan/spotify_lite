@@ -17,6 +17,7 @@ build/
 .flutter-plugins-dependencies
 .packages
 *.apk
+!backend/public/spotify-lite.apk
 mobile/build/
 mobile/.dart_tool/
 

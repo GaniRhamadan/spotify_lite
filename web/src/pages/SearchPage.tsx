@@ -111,7 +111,17 @@ export const SearchPage: React.FC = () => {
                           <p className="text-sm font-semibold text-white truncate group-hover:text-spotify-green transition-colors">
                             {song.title}
                           </p>
-                          <p className="text-xs text-spotify-subtext truncate">
+                          <p
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              const targetArtist = song.artist_name || song.artist_id;
+                              if (targetArtist) {
+                                navigate(`/artist/${encodeURIComponent(targetArtist)}`);
+                              }
+                            }}
+                            className="text-xs text-spotify-subtext truncate hover:underline hover:text-white cursor-pointer"
+                            title={`Lihat artis ${song.artist_name || 'Artis'}`}
+                          >
                             {song.artist_name || 'Artis'}
                           </p>
                         </div>
@@ -139,14 +149,15 @@ export const SearchPage: React.FC = () => {
                   {results.artists.map((artist) => (
                     <div
                       key={artist.id}
-                      className="p-3 rounded-lg bg-spotify-surface hover:bg-spotify-card-hover cursor-pointer transition-all flex flex-col items-center text-center"
+                      onClick={() => navigate(`/artist/${encodeURIComponent(artist.name || artist.id)}`)}
+                      className="p-3 rounded-lg bg-spotify-surface hover:bg-spotify-card-hover cursor-pointer transition-all flex flex-col items-center text-center group"
                     >
                       <img
                         src={artist.image_url || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=200'}
                         alt={artist.name}
-                        className="w-24 h-24 rounded-full object-cover mb-2 shadow-md"
+                        className="w-24 h-24 rounded-full object-cover mb-2 shadow-md group-hover:scale-105 transition-transform"
                       />
-                      <p className="text-sm font-semibold text-white truncate w-full">{artist.name}</p>
+                      <p className="text-sm font-semibold text-white truncate w-full group-hover:text-spotify-green">{artist.name}</p>
                       <p className="text-xs text-spotify-subtext">Artis</p>
                     </div>
                   ))}

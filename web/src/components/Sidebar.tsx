@@ -13,7 +13,7 @@ export const Sidebar: React.FC = () => {
   };
 
   return (
-    <aside className="w-64 bg-black flex flex-col justify-between p-6 h-full select-none border-r border-[#222]">
+    <aside className="w-64 bg-[#121212] rounded-lg flex flex-col justify-between p-5 h-full select-none border border-white/5 shrink-0">
       <div className="flex flex-col gap-y-6">
         {/* Logo Spotify Lite */}
         <div className="flex items-center gap-x-2 px-2 cursor-pointer" onClick={() => navigate('/')}>

@@ -7,6 +7,7 @@ const auth_middleware_1 = require("../middlewares/auth.middleware");
 const router = (0, express_1.Router)();
 router.get('/', auth_middleware_1.optionalJWT, song_controller_1.SongController.getAllSongs);
 router.get('/trending', auth_middleware_1.optionalJWT, song_controller_1.SongController.getTrending);
+router.get('/recommendations', auth_middleware_1.optionalJWT, song_controller_1.SongController.getRecommendations);
 router.get('/:id', auth_middleware_1.optionalJWT, song_controller_1.SongController.getSongById);
 router.get('/:id/lyrics', auth_middleware_1.optionalJWT, song_controller_1.SongController.getSongLyrics);
 router.get('/:id/stream', stream_controller_1.StreamController.streamSong);

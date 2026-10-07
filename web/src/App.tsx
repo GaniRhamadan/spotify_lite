@@ -11,15 +11,23 @@ import { LibraryPage } from './pages/LibraryPage';
 import { PlaylistDetailPage } from './pages/PlaylistDetailPage';
 import { AdminUploadPage } from './pages/AdminUploadPage';
 import { LoginPage } from './pages/LoginPage';
+import { ArtistPage } from './pages/ArtistPage';
 
 function MainLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex h-screen w-screen overflow-hidden bg-spotify-base">
-      <Sidebar />
-      <div className="flex-1 flex flex-col h-full overflow-hidden relative">
-        {children}
+    <div className="flex flex-col h-screen w-screen overflow-hidden bg-black text-white select-none">
+      {/* 1. Area Atas: Sidebar (Kiri) dan Konten Utama (Kanan) */}
+      <div className="flex-1 flex overflow-hidden p-2 gap-2 min-h-0">
+        <Sidebar />
+        <div className="flex-1 flex flex-col h-full overflow-hidden relative bg-spotify-base rounded-lg border border-white/5">
+          {children}
+        </div>
       </div>
+
+      {/* 2. Area Bawah: Pemutar Musik Penuh di Bawah Layar (Persis Spotify Asli) */}
       <BottomPlayer />
+
+      {/* 3. Modal Layar Penuh Pemutar */}
       <FullscreenPlayer />
     </div>
   );
@@ -69,6 +77,14 @@ export function App() {
               element={
                 <MainLayout>
                   <AdminUploadPage />
+                </MainLayout>
+              }
+            />
+            <Route
+              path="/artist/:id"
+              element={
+                <MainLayout>
+                  <ArtistPage />
                 </MainLayout>
               }
             />

@@ -5,6 +5,7 @@ const artist_controller_1 = require("../controllers/artist.controller");
 const router = (0, express_1.Router)();
 router.get('/artists', artist_controller_1.ArtistController.getArtists);
 router.get('/artists/:id', artist_controller_1.ArtistController.getArtistById);
+router.get('/artist/:id', artist_controller_1.ArtistController.getArtistById);
 router.get('/albums', artist_controller_1.ArtistController.getAlbums);
 router.get('/albums/:id', artist_controller_1.ArtistController.getAlbumById);
 exports.default = router;

@@ -17,6 +17,7 @@ export interface IArtist {
   name: string;
   bio?: string | null;
   image_url?: string | null;
+  monthly_listeners?: string | null;
 }
 
 export interface IAlbum {

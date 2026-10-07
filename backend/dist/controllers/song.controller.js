@@ -159,6 +159,70 @@ class SongController {
             res.status(500).json({ success: false, message: 'Gagal memuat lagu trending' });
         }
     }
+    static async getRecommendations(req, res) {
+        try {
+            const seedArtist = (req.query.seed_artist || '').trim();
+            const seedGenre = (req.query.seed_genre || '').trim();
+            const limit = parseInt(req.query.limit || '15', 10);
+            const targetSeed = seedArtist || seedGenre || 'pop';
+            // Cari rekomendasi lagu online berdasarkan kesukaan/kebiasaan dengar user
+            let recommendedSongs = [];
+            try {
+                const query = seedArtist
+                    ? `${seedArtist} radio mix songs`
+                    : `${targetSeed} top hits music mix`;
+                recommendedSongs = await youtube_service_1.YoutubeService.searchSongs(query, limit);
+            }
+            catch (err) {
+                console.warn('Gagal fetch rekomendasi online:', err.message);
+            }
+            // Gabungkan lagu database lokal jika cocok
+            let localMatches = [];
+            if ((0, database_1.getIsPostgresConnected)()) {
+                try {
+                    const lRes = await database_1.pool.query(`SELECT s.id, s.title, s.duration_seconds, s.cover_url, s.play_count, a.name as artist_name
+             FROM songs s
+             LEFT JOIN artists a ON s.artist_id = a.id
+             WHERE LOWER(a.name) LIKE LOWER($1) OR LOWER(s.title) LIKE LOWER($1)
+             LIMIT 5`, [`%${targetSeed}%`]);
+                    localMatches = lRes.rows;
+                }
+                catch { }
+            }
+            else {
+                localMatches = Array.from(database_1.inMemoryStore.songs.values())
+                    .filter(s => {
+                    const art = database_1.inMemoryStore.artists.get(s.artist_id);
+                    return (art?.name.toLowerCase().includes(targetSeed.toLowerCase()) ||
+                        s.title.toLowerCase().includes(targetSeed.toLowerCase()));
+                })
+                    .slice(0, 5)
+                    .map(s => {
+                    const art = database_1.inMemoryStore.artists.get(s.artist_id);
+                    return { ...s, artist_name: art?.name || 'Artis' };
+                });
+            }
+            const seen = new Set();
+            const combined = [];
+            for (const item of [...recommendedSongs, ...localMatches]) {
+                if (!seen.has(item.id)) {
+                    seen.add(item.id);
+                    combined.push(item);
+                }
+            }
+            res.status(200).json({
+                success: true,
+                data: combined.slice(0, limit),
+                algorithm_basis: {
+                    seed: targetSeed,
+                    type: seedArtist ? 'artist' : 'genre',
+                },
+            });
+        }
+        catch (error) {
+            res.status(500).json({ success: false, message: 'Gagal memuat rekomendasi: ' + error.message });
+        }
+    }
     static async getSongLyrics(req, res) {
         try {
             const id = req.params.id;

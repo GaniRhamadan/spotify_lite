@@ -49,6 +49,8 @@ class ApiEndpoints {
 
   static const String songs = '/songs';
   static const String trendingSongs = '/songs/trending';
+  static const String recommendations = '/songs/recommendations';
+  static String artistDetail(String id) => '/artists/$id';
   static String streamSong(String id) => '/songs/$id/stream';
 
   static const String search = '/search';
