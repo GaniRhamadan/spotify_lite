@@ -28,6 +28,21 @@ function formatTime(seconds: number): string {
 interface SyncedLine {
   time: number;
   text: string;
+  stanzaIndex: number;
+  lineIndex: number;
+  globalIndex: number;
+}
+
+interface StanzaGroup {
+  stanzaIndex: number;
+  label: string;
+  lines: SyncedLine[];
+}
+
+interface PlainStanza {
+  stanzaIndex: number;
+  label: string;
+  lines: string[];
 }
 
 export const FullscreenPlayer: React.FC = () => {
@@ -54,6 +69,8 @@ export const FullscreenPlayer: React.FC = () => {
   } = useAudio();
 
   const [syncedLines, setSyncedLines] = useState<SyncedLine[]>([]);
+  const [stanzas, setStanzas] = useState<StanzaGroup[]>([]);
+  const [plainStanzas, setPlainStanzas] = useState<PlainStanza[]>([]);
   const [plainLyrics, setPlainLyrics] = useState<string | null>(null);
   const [isLoadingLyrics, setIsLoadingLyrics] = useState(false);
   const [activeLineIndex, setActiveLineIndex] = useState<number>(-1);
@@ -73,6 +90,8 @@ export const FullscreenPlayer: React.FC = () => {
     let isMounted = true;
     setIsLoadingLyrics(true);
     setSyncedLines([]);
+    setStanzas([]);
+    setPlainStanzas([]);
     setPlainLyrics(null);
 
     const fetchLyrics = async () => {
@@ -89,30 +108,128 @@ export const FullscreenPlayer: React.FC = () => {
         if (!isMounted) return;
 
         if (res.data?.syncedLyrics) {
-          // Parse format LRC [mm:ss.xx] teks
-          const lines = res.data.syncedLyrics.split('\n');
-          const parsed: SyncedLine[] = [];
-          const regex = /\[(\d{2}):(\d{2}(?:\.\d+)?)\](.*)/;
+          const rawLines = res.data.syncedLyrics.split('\n');
+          const timeRegex = /\[(\d{2}):(\d{2}(?:\.\d+)?)\]/;
+          const metaRegex = /^\[(ti|ar|al|by|offset|length|re|ve):/i;
+          const sectionRegex = /^(\[|\()?(Verse|Chorus|Reff|Refrein|Pre-Chorus|Bridge|Outro|Intro|Bait|Hook)\b.*(\]|\))?$/i;
 
-          for (const line of lines) {
-            const match = line.match(regex);
+          const rawTimed: { time: number; text: string }[] = [];
+
+          for (const raw of rawLines) {
+            const line = raw.trim();
+            if (!line || metaRegex.test(line)) continue;
+            const match = line.match(timeRegex);
             if (match) {
               const mins = parseInt(match[1], 10);
               const secs = parseFloat(match[2]);
-              const text = match[3].trim();
-              if (text) {
-                parsed.push({ time: mins * 60 + secs, text });
-              }
+              const text = line.replace(timeRegex, '').trim();
+              rawTimed.push({ time: mins * 60 + secs, text });
             }
           }
 
-          if (parsed.length > 0) {
-            setSyncedLines(parsed);
+          rawTimed.sort((a, b) => a.time - b.time);
+
+          const stanzaList: StanzaGroup[] = [];
+          const allLines: SyncedLine[] = [];
+          let currentLines: SyncedLine[] = [];
+          let stanzaCounter = 1;
+          let currentLabel = 'Bait 1';
+
+          for (let i = 0; i < rawTimed.length; i++) {
+            const item = rawTimed[i];
+            const time = item.time;
+            const text = item.text;
+
+            if (sectionRegex.test(text)) {
+              if (currentLines.length > 0) {
+                stanzaList.push({
+                  stanzaIndex: stanzaCounter,
+                  label: currentLabel,
+                  lines: [...currentLines],
+                });
+                stanzaCounter++;
+                currentLines = [];
+              }
+              const clean = text.replace(/[\[\]\(\)]/g, '').trim();
+              currentLabel = clean || `Bait ${stanzaCounter}`;
+              continue;
+            }
+
+            if (!text) {
+              if (currentLines.length > 0) {
+                stanzaList.push({
+                  stanzaIndex: stanzaCounter,
+                  label: currentLabel,
+                  lines: [...currentLines],
+                });
+                stanzaCounter++;
+                currentLabel = `Bait ${stanzaCounter}`;
+                currentLines = [];
+              }
+              continue;
+            }
+
+            if (currentLines.length > 0) {
+              const lastTime = currentLines[currentLines.length - 1].time;
+              if (time - lastTime > 5.5) {
+                stanzaList.push({
+                  stanzaIndex: stanzaCounter,
+                  label: currentLabel,
+                  lines: [...currentLines],
+                });
+                stanzaCounter++;
+                currentLabel = `Bait ${stanzaCounter}`;
+                currentLines = [];
+              }
+            }
+
+            const parsedLine: SyncedLine = {
+              time,
+              text,
+              stanzaIndex: stanzaCounter,
+              lineIndex: currentLines.length + 1,
+              globalIndex: allLines.length,
+            };
+            currentLines.push(parsedLine);
+            allLines.push(parsedLine);
+          }
+
+          if (currentLines.length > 0) {
+            stanzaList.push({
+              stanzaIndex: stanzaCounter,
+              label: currentLabel,
+              lines: [...currentLines],
+            });
+          }
+
+          if (allLines.length > 0) {
+            setSyncedLines(allLines);
+            setStanzas(stanzaList);
           } else {
             setPlainLyrics(res.data.lyrics);
           }
         } else if (res.data?.lyrics) {
           setPlainLyrics(res.data.lyrics);
+          const rawLines = res.data.lyrics.split('\n');
+          const pStanzas: PlainStanza[] = [];
+          let cur: string[] = [];
+          let sCount = 1;
+          for (const line of rawLines) {
+            const t = line.trim();
+            if (!t) {
+              if (cur.length > 0) {
+                pStanzas.push({ stanzaIndex: sCount, label: `Bait ${sCount}`, lines: [...cur] });
+                sCount++;
+                cur = [];
+              }
+            } else {
+              cur.push(t);
+            }
+          }
+          if (cur.length > 0) {
+            pStanzas.push({ stanzaIndex: sCount, label: `Bait ${sCount}`, lines: [...cur] });
+          }
+          setPlainStanzas(pStanzas);
         } else {
           setPlainLyrics(null);
         }
@@ -283,9 +400,9 @@ export const FullscreenPlayer: React.FC = () => {
         {fullscreenTab === 'lyrics' && (
           <div
             ref={lyricsContainerRef}
-            className="max-w-2xl w-full h-full overflow-y-auto px-6 py-8 flex flex-col items-center text-center scroll-smooth scrollbar-thin scrollbar-thumb-white/20"
+            className="max-w-2xl w-full h-full overflow-y-auto px-4 md:px-6 py-6 flex flex-col items-center scroll-smooth scrollbar-thin scrollbar-thumb-white/20"
           >
-            <div className="flex items-center gap-2 mb-6">
+            <div className="flex items-center gap-2 mb-4">
               <h3 className="text-xl font-bold text-white">Lirik Lagu</h3>
               {syncedLines.length > 0 && (
                 <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-spotify-green/20 text-spotify-green border border-spotify-green/30">
@@ -294,39 +411,101 @@ export const FullscreenPlayer: React.FC = () => {
               )}
             </div>
 
+            {/* Status Penanda Bait ke berapa yang sedang dimainkan */}
+            {stanzas.length > 0 && activeLineIndex >= 0 && (
+              <div className="mb-6 px-4 py-1.5 rounded-full bg-spotify-green/10 border border-spotify-green/30 text-spotify-green text-xs font-bold flex items-center gap-2 animate-in fade-in">
+                <span className="w-2 h-2 rounded-full bg-spotify-green animate-pulse" />
+                <span>
+                  Sedang di Bait ke-{syncedLines[activeLineIndex]?.stanzaIndex || 1} dari {stanzas.length}
+                </span>
+                <span className="text-spotify-subtext/60">•</span>
+                <span className="text-white/80">Baris ke-{syncedLines[activeLineIndex]?.lineIndex || 1}</span>
+              </div>
+            )}
+
             {isLoadingLyrics ? (
               <div className="flex flex-col items-center justify-center py-20 text-spotify-subtext gap-3">
                 <Loader2 className="w-8 h-8 animate-spin text-spotify-green" />
                 <p className="text-sm">Mencari lirik otomatis...</p>
               </div>
-            ) : syncedLines.length > 0 ? (
-              /* Synced Karaoke Lyrics */
-              <div className="space-y-6 text-xl md:text-2xl font-bold leading-relaxed pb-20">
-                {syncedLines.map((line, idx) => {
-                  const isActive = idx === activeLineIndex;
+            ) : stanzas.length > 0 ? (
+              /* Synced Karaoke Lyrics grouped by Stanzas */
+              <div className="w-full space-y-8 pb-24 text-center">
+                {stanzas.map((stanza) => {
+                  const currentStanzaIndex = syncedLines[activeLineIndex]?.stanzaIndex;
+                  const isCurrentStanza = stanza.stanzaIndex === currentStanzaIndex;
+
                   return (
-                    <p
-                      key={idx}
-                      ref={isActive ? activeLineRef : null}
-                      onClick={() => seekTo(line.time)}
-                      className={`cursor-pointer transition-all duration-300 py-1 px-3 rounded-lg ${
-                        isActive
-                          ? 'text-spotify-green scale-105 drop-shadow-[0_0_12px_rgba(29,185,84,0.4)] font-extrabold'
-                          : 'text-spotify-subtext/60 hover:text-white/90 hover:scale-100 font-semibold'
+                    <div
+                      key={stanza.stanzaIndex}
+                      className={`p-5 rounded-2xl transition-all duration-300 border ${
+                        isCurrentStanza
+                          ? 'bg-spotify-green/5 border-spotify-green/30 shadow-lg shadow-spotify-green/5'
+                          : 'bg-white/[0.02] border-white/5'
                       }`}
                     >
-                      {line.text}
-                    </p>
+                      <div className="flex items-center justify-between mb-4 pb-2 border-b border-white/5">
+                        <span
+                          className={`text-[11px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full ${
+                            isCurrentStanza
+                              ? 'bg-spotify-green text-black font-extrabold shadow-sm'
+                              : 'bg-white/10 text-spotify-subtext'
+                          }`}
+                        >
+                          {isCurrentStanza ? `▶ Sedang Aktif: ${stanza.label}` : stanza.label}
+                        </span>
+                        <span className="text-[11px] text-spotify-subtext font-mono">
+                          {stanza.lines.length} Baris
+                        </span>
+                      </div>
+
+                      <div className="space-y-4">
+                        {stanza.lines.map((line) => {
+                          const isActive = line.globalIndex === activeLineIndex;
+                          return (
+                            <p
+                              key={line.globalIndex}
+                              ref={isActive ? activeLineRef : null}
+                              onClick={() => seekTo(line.time)}
+                              className={`cursor-pointer transition-all duration-300 py-1.5 px-3 rounded-xl text-lg md:text-xl ${
+                                isActive
+                                  ? 'text-spotify-green bg-spotify-green/15 scale-[1.02] drop-shadow-[0_0_12px_rgba(29,185,84,0.4)] font-extrabold'
+                                  : 'text-spotify-subtext/70 hover:text-white hover:bg-white/5 font-semibold'
+                              }`}
+                            >
+                              {line.text}
+                            </p>
+                          );
+                        })}
+                      </div>
+                    </div>
                   );
                 })}
               </div>
-            ) : plainLyrics ? (
-              /* Plain Text Lyrics */
-              <div className="space-y-4 text-base md:text-lg font-medium text-spotify-subtext leading-relaxed pb-20 max-w-lg">
-                {plainLyrics.split('\n').map((line, idx) => (
-                  <p key={idx} className="hover:text-white transition-colors">
-                    {line}
-                  </p>
+            ) : plainStanzas.length > 0 ? (
+              /* Plain Text Lyrics grouped by Stanzas */
+              <div className="w-full space-y-6 pb-24 text-center max-w-xl">
+                {plainStanzas.map((stanza) => (
+                  <div
+                    key={stanza.stanzaIndex}
+                    className="p-5 rounded-2xl bg-white/[0.02] border border-white/5 space-y-3"
+                  >
+                    <div className="flex items-center justify-between pb-2 border-b border-white/5">
+                      <span className="text-[11px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-white/10 text-spotify-subtext">
+                        {stanza.label}
+                      </span>
+                      <span className="text-[11px] text-spotify-subtext font-mono">
+                        {stanza.lines.length} Baris
+                      </span>
+                    </div>
+                    <div className="space-y-2 text-base md:text-lg font-medium text-spotify-subtext/90 leading-relaxed">
+                      {stanza.lines.map((line, lIdx) => (
+                        <p key={lIdx} className="hover:text-white transition-colors">
+                          {line}
+                        </p>
+                      ))}
+                    </div>
+                  </div>
                 ))}
               </div>
             ) : (

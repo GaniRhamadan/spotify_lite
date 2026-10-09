@@ -1,7 +1,10 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:dio/dio.dart';
 import '../../../core/constants/app_colors.dart';
+import '../../../core/constants/api_endpoints.dart';
+import '../../../core/network/api_client.dart';
 import '../../../core/services/direct_music_service.dart';
 import '../../player/models/song_model.dart';
 import '../../player/services/audio_player_handler.dart';
@@ -32,14 +35,51 @@ class _SearchScreenState extends State<SearchScreen> {
     _debounceTimer = Timer(const Duration(milliseconds: 300), () async {
       setState(() => _isSearching = true);
       try {
-        final songs = await DirectMusicService.instance.searchSongs(query.trim());
+        final trimmed = query.trim();
+        List<SongModel> backendSongs = [];
+        try {
+          final res = await ApiClient().dio.get(
+            ApiEndpoints.search,
+            queryParameters: {'q': trimmed},
+            options: Options(
+              sendTimeout: const Duration(milliseconds: 2500),
+              receiveTimeout: const Duration(milliseconds: 2500),
+            ),
+          );
+          if (res.statusCode == 200 && res.data != null && res.data['success'] == true) {
+            final rawSongs = (res.data['data']?['songs'] as List?) ?? [];
+            backendSongs = rawSongs.map((s) => SongModel.fromJson(s as Map<String, dynamic>)).toList();
+          }
+        } catch (backendErr) {
+          debugPrint('Backend search fallback: $backendErr');
+        }
+
+        // Cari direct juga jika backend kosong atau sedikit
+        List<SongModel> directSongs = [];
+        if (backendSongs.isEmpty || backendSongs.length < 5) {
+          try {
+            directSongs = await DirectMusicService.instance.searchSongs(trimmed);
+          } catch (e) {
+            debugPrint('Error direct music search: $e');
+          }
+        }
+
+        // Gabungkan tanpa duplikasi ID
+        final combined = <SongModel>[...backendSongs];
+        final existingIds = backendSongs.map((s) => s.id).toSet();
+        for (final ds in directSongs) {
+          if (!existingIds.contains(ds.id)) {
+            combined.add(ds);
+          }
+        }
+
         if (mounted) {
           setState(() {
-            _results = songs;
+            _results = combined;
           });
         }
       } catch (e) {
-        debugPrint('Error pencarian direct: $e');
+        debugPrint('Error pencarian: $e');
       } finally {
         if (mounted) {
           setState(() => _isSearching = false);

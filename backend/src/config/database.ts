@@ -24,14 +24,32 @@ export const pool = new Pool(
 
 let isPostgresConnected = false;
 
-// Uji koneksi ke PostgreSQL saat server dinyalakan
+import fs from 'fs';
+import path from 'path';
+
+// Uji koneksi ke PostgreSQL saat server dinyalakan & migrasi skema jika tabel belum ada
 export const checkDatabaseConnection = async (): Promise<boolean> => {
   try {
     const client = await pool.connect();
     const res = await client.query('SELECT NOW()');
+    console.log('✅ Terhubung ke database PostgreSQL:', res.rows[0].now);
+
+    // Pastikan skema tabel sudah siap
+    const tableCheck = await client.query(
+      "SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'songs'"
+    );
+    if (tableCheck.rows.length === 0) {
+      console.log('📦 Menginisialisasi skema database Spotify Lite (schema.sql)...');
+      const schemaPath = path.join(__dirname, 'schema.sql');
+      if (fs.existsSync(schemaPath)) {
+        const schemaSql = fs.readFileSync(schemaPath, 'utf8');
+        await client.query(schemaSql);
+        console.log('✅ Skema tabel berhasil diinisialisasi ke PostgreSQL!');
+      }
+    }
+
     client.release();
     isPostgresConnected = true;
-    console.log('✅ Terhubung ke database PostgreSQL:', res.rows[0].now);
     return true;
   } catch (err: any) {
     isPostgresConnected = false;

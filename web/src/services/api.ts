@@ -1,4 +1,5 @@
-export const API_BASE = 'https://spotify.sentinelofc.web.id/api/v1';
+const isLocal = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+export const API_BASE = (import.meta as any).env?.VITE_API_URL || (isLocal ? 'http://localhost:5000/api/v1' : 'https://spotify.sentinelofc.web.id/api/v1');
 
 export const getAuthToken = (): string | null => {
   return localStorage.getItem('spotify_token');

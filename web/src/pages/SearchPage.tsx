@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { Search as SearchIcon, Play, Heart } from 'lucide-react';
+import { Search as SearchIcon, Play, Heart, Plus, X } from 'lucide-react';
 import { apiRequest } from '../services/api';
 import { ISong, IArtist, IAlbum, IPlaylist } from '../types';
 import { Navbar } from '../components/Navbar';
 import { useAudio } from '../context/AudioContext';
 import { useNavigate } from 'react-router-dom';
+import { AddToPlaylistModal } from '../components/AddToPlaylistModal';
 
 function formatDuration(sec: number): string {
   const m = Math.floor(sec / 60);
@@ -21,21 +22,24 @@ export const SearchPage: React.FC = () => {
     playlists: IPlaylist[];
   }>({ songs: [], artists: [], albums: [], playlists: [] });
   const [isSearching, setIsSearching] = useState<boolean>(false);
+  const [selectedSongForPlaylist, setSelectedSongForPlaylist] = useState<ISong | null>(null);
 
   const { playSong } = useAudio();
   const navigate = useNavigate();
 
-  // Debounced Search Effect (250ms)
+  // Debounced Search Effect (200ms)
   useEffect(() => {
-    if (!query.trim()) {
+    const cleanQ = query.trim().replace(/\s+/g, ' ');
+    if (!cleanQ) {
       setResults({ songs: [], artists: [], albums: [], playlists: [] });
+      setIsSearching(false);
       return;
     }
 
     setIsSearching(true);
     const handler = setTimeout(async () => {
       try {
-        const res = await apiRequest(`/search?q=${encodeURIComponent(query)}`);
+        const res = await apiRequest(`/search?q=${encodeURIComponent(cleanQ)}`);
         if (res.success) {
           setResults(res.data);
         }
@@ -44,10 +48,23 @@ export const SearchPage: React.FC = () => {
       } finally {
         setIsSearching(false);
       }
-    }, 250);
+    }, 200);
 
     return () => clearTimeout(handler);
   }, [query]);
+
+  const handleToggleLike = async (e: React.MouseEvent, song: ISong) => {
+    e.stopPropagation();
+    try {
+      const res = await apiRequest(`/user/likes/${song.id}`, { method: 'POST' });
+      if (res.success) {
+        setResults((prev) => ({
+          ...prev,
+          songs: prev.songs.map((s) => (s.id === song.id ? { ...s, is_liked: res.is_liked } : s)),
+        }));
+      }
+    } catch {}
+  };
 
   return (
     <div className="flex-1 overflow-y-auto pb-24">
@@ -59,9 +76,17 @@ export const SearchPage: React.FC = () => {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Mau dengar apa hari ini?"
-            className="w-full bg-[#242424] text-white text-sm pl-11 pr-4 py-2.5 rounded-full border border-transparent focus:border-white/20 focus:outline-none placeholder:text-spotify-subtext"
+            className="w-full bg-[#242424] text-white text-sm pl-11 pr-10 py-2.5 rounded-full border border-transparent focus:border-white/20 focus:outline-none placeholder:text-spotify-subtext"
             autoFocus
           />
+          {query && (
+            <button
+              onClick={() => setQuery('')}
+              className="absolute right-3.5 top-1/2 -translate-y-1/2 text-spotify-subtext hover:text-white"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          )}
         </div>
       </Navbar>
 
@@ -93,7 +118,7 @@ export const SearchPage: React.FC = () => {
             {/* Hasil Teratas & Lagu */}
             {results.songs.length > 0 && (
               <div>
-                <h3 className="text-xl font-bold text-white mb-4">Lagu</h3>
+                <h3 className="text-xl font-bold text-white mb-4">Lagu ({results.songs.length})</h3>
                 <div className="space-y-1">
                   {results.songs.map((song) => (
                     <div
@@ -105,7 +130,7 @@ export const SearchPage: React.FC = () => {
                         <img
                           src={song.cover_url || 'https://images.unsplash.com/photo-1518495973542-4542c06a5843?w=100'}
                           alt={song.title}
-                          className="w-11 h-11 rounded object-cover"
+                          className="w-11 h-11 rounded object-cover shrink-0"
                         />
                         <div className="truncate">
                           <p className="text-sm font-semibold text-white truncate group-hover:text-spotify-green transition-colors">
@@ -127,11 +152,43 @@ export const SearchPage: React.FC = () => {
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-x-4">
-                        <span className="text-xs font-mono text-spotify-subtext">
+                      <div className="flex items-center gap-x-3 shrink-0">
+                        {/* Tombol Sukai Lagu */}
+                        <button
+                          onClick={(e) => handleToggleLike(e, song)}
+                          className="p-1.5 text-spotify-subtext hover:text-white transition-colors"
+                          title={song.is_liked ? 'Hapus dari Disukai' : 'Sukai Lagu'}
+                        >
+                          <Heart
+                            className={`w-4 h-4 ${
+                              song.is_liked ? 'fill-spotify-green text-spotify-green' : 'text-spotify-subtext'
+                            }`}
+                          />
+                        </button>
+
+                        {/* Tombol Tambah ke Playlist */}
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedSongForPlaylist(song);
+                          }}
+                          className="p-1.5 text-spotify-subtext hover:text-white transition-colors"
+                          title="Tambah ke Playlist"
+                        >
+                          <Plus className="w-4 h-4" />
+                        </button>
+
+                        <span className="text-xs font-mono text-spotify-subtext w-10 text-right">
                           {formatDuration(song.duration_seconds)}
                         </span>
-                        <button className="w-8 h-8 rounded-full bg-spotify-green flex items-center justify-center text-black opacity-0 group-hover:opacity-100 transition-opacity">
+
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            playSong(song, results.songs);
+                          }}
+                          className="w-8 h-8 rounded-full bg-spotify-green flex items-center justify-center text-black opacity-0 group-hover:opacity-100 transition-opacity"
+                        >
                           <Play className="w-4 h-4 fill-black stroke-black ml-0.5" />
                         </button>
                       </div>
@@ -202,6 +259,13 @@ export const SearchPage: React.FC = () => {
           </div>
         )}
       </main>
+
+      <AddToPlaylistModal
+        song={selectedSongForPlaylist}
+        isOpen={!!selectedSongForPlaylist}
+        onClose={() => setSelectedSongForPlaylist(null)}
+      />
     </div>
   );
 };
+

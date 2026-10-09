@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:audio_service/audio_service.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:dio/dio.dart';
+import 'package:youtube_player_iframe/youtube_player_iframe.dart';
 import '../../../core/constants/app_colors.dart';
-import '../../../core/constants/api_endpoints.dart';
+import '../../../core/services/direct_music_service.dart';
 import '../services/audio_player_handler.dart';
 import '../models/song_model.dart';
 import '../../library/services/favorites_service.dart';
+import 'karaoke_lyrics_sheet.dart';
 
 class NowPlayingScreen extends StatefulWidget {
   final AudioPlayerHandler audioHandler;
@@ -21,10 +22,125 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
   bool _isShuffle = false;
   AudioServiceRepeatMode _repeatMode = AudioServiceRepeatMode.none;
 
+  // State untuk Pemutar Video YouTube (Menggantikan Kotak Banner)
+  bool _isVideoMode = false;
+  YoutubePlayerController? _ytController;
+  String? _loadedVideoId;
+  bool _isLoadingVideo = false;
+  String? _videoError;
+  String? _lastTrackId;
+
+  @override
+  void dispose() {
+    _ytController?.close();
+    super.dispose();
+  }
+
   String _formatDuration(Duration d) {
     final minutes = d.inMinutes;
     final seconds = d.inSeconds % 60;
     return '$minutes:${seconds < 10 ? '0' : ''}$seconds';
+  }
+
+  void _initOrUpdateVideo(String videoId) {
+    if (_loadedVideoId == videoId && _ytController != null) return;
+    _loadedVideoId = videoId;
+
+    _ytController ??= YoutubePlayerController(
+      params: const YoutubePlayerParams(
+        showControls: true,
+        showFullscreenButton: true,
+        mute: false,
+        showVideoAnnotations: false,
+        enableCaption: true,
+      ),
+    );
+    _ytController!.loadVideoById(videoId: videoId);
+  }
+
+  Future<void> _toggleVideoMode(MediaItem item) async {
+    if (_isVideoMode) {
+      // 1. Matikan Mode Video & Kembali ke Musik / Cover
+      _ytController?.pauseVideo();
+      await widget.audioHandler.play();
+      if (mounted) {
+        setState(() {
+          _isVideoMode = false;
+          _videoError = null;
+        });
+      }
+    } else {
+      // 2. Aktifkan Mode Video & Jeda Audio Musik agar tidak bentrok suara
+      await widget.audioHandler.pause();
+      if (mounted) {
+        setState(() {
+          _isVideoMode = true;
+          _isLoadingVideo = true;
+          _videoError = null;
+        });
+      }
+
+      try {
+        String? videoId;
+        if (item.id.startsWith('yt_')) {
+          videoId = item.id.replaceFirst('yt_', '');
+        } else {
+          // Fallback cari video YouTube jika ID lagu lokal/database
+          final searchList = await DirectMusicService.instance.searchSongs(
+            '${item.title} ${item.artist ?? ""}',
+            limit: 3,
+          );
+          if (searchList.isNotEmpty) {
+            videoId = searchList.first.id.replaceFirst('yt_', '');
+          }
+        }
+
+        if (videoId != null && videoId.isNotEmpty) {
+          _initOrUpdateVideo(videoId);
+          if (mounted) {
+            setState(() {
+              _isLoadingVideo = false;
+            });
+          }
+        } else {
+          if (mounted) {
+            setState(() {
+              _isLoadingVideo = false;
+              _videoError = 'Video tidak ditemukan untuk lagu ini.';
+            });
+          }
+        }
+      } catch (e) {
+        if (mounted) {
+          setState(() {
+            _isLoadingVideo = false;
+            _videoError = 'Gagal memuat video: $e';
+          });
+        }
+      }
+    }
+  }
+
+  void _showKaraokeLyricsSheet(BuildContext context, MediaItem item) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (context) {
+        return DraggableScrollableSheet(
+          initialChildSize: 0.8,
+          minChildSize: 0.45,
+          maxChildSize: 0.95,
+          expand: false,
+          builder: (context, scrollController) {
+            return KaraokeLyricsSheet(
+              item: item,
+              audioHandler: widget.audioHandler,
+            );
+          },
+        );
+      },
+    );
   }
 
   void _showQueueBottomSheet(BuildContext context, List<MediaItem> queue, MediaItem current) {
@@ -107,204 +223,6 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
     );
   }
 
-  void _showLyricsBottomSheet(BuildContext context, MediaItem item) {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: const Color(0xFF14101E),
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (context) {
-        return DraggableScrollableSheet(
-          initialChildSize: 0.75,
-          minChildSize: 0.4,
-          maxChildSize: 0.95,
-          expand: false,
-          builder: (context, scrollController) {
-            return FutureBuilder<Response>(
-              future: Dio().get(
-                '${ApiEndpoints.baseUrl}/songs/${item.id}/lyrics',
-                queryParameters: {
-                  'title': item.title,
-                  'artist': item.artist ?? '',
-                },
-              ),
-              builder: (context, snapshot) {
-                return Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-                  child: Column(
-                    children: [
-                      Center(
-                        child: Container(
-                          width: 44,
-                          height: 5,
-                          decoration: BoxDecoration(
-                            color: Colors.white24,
-                            borderRadius: BorderRadius.circular(3),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                const Text(
-                                  'Lirik Lagu',
-                                  style: TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 20,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                                Text(
-                                  '${item.title} • ${item.artist ?? ""}',
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(color: AppColors.textSecondary, fontSize: 13),
-                                ),
-                              ],
-                            ),
-                          ),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: AppColors.primary.withValues(alpha: 0.2),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: const Text(
-                              'KARAOKE',
-                              style: TextStyle(color: AppColors.primary, fontSize: 10, fontWeight: FontWeight.bold),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const Divider(color: Colors.white12, height: 24),
-                      Expanded(
-                        child: Builder(
-                          builder: (context) {
-                            if (snapshot.connectionState == ConnectionState.waiting) {
-                              return const Center(
-                                child: CircularProgressIndicator(color: AppColors.primary),
-                              );
-                            }
-                            if (snapshot.hasError || !snapshot.hasData) {
-                              return const Center(
-                                child: Text(
-                                  'Lirik tidak dapat dimuat atau belum tersedia.',
-                                  style: TextStyle(color: AppColors.textSecondary),
-                                ),
-                              );
-                            }
-
-                            final data = snapshot.data?.data?['data'];
-                            final rawLyrics = data?['lyrics'] as String? ?? data?['syncedLyrics'] as String?;
-
-                            if (rawLyrics == null || rawLyrics.trim().isEmpty) {
-                              return const Center(
-                                child: Text(
-                                  'Belum ada lirik untuk lagu ini.',
-                                  style: TextStyle(color: AppColors.textSecondary),
-                                ),
-                              );
-                            }
-
-                            final cleanLines = rawLyrics
-                                .split('\n')
-                                .map((l) => l.replaceAll(RegExp(r'\[\d{2}:\d{2}(?:\.\d+)?\]'), '').trim())
-                                .where((l) => l.isNotEmpty)
-                                .toList();
-
-                            return ListView.builder(
-                              controller: scrollController,
-                              itemCount: cleanLines.length,
-                              itemBuilder: (context, idx) {
-                                return Padding(
-                                  padding: const EdgeInsets.symmetric(vertical: 8),
-                                  child: Text(
-                                    cleanLines[idx],
-                                    textAlign: TextAlign.center,
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 18,
-                                      fontWeight: FontWeight.w600,
-                                      height: 1.4,
-                                    ),
-                                  ),
-                                );
-                              },
-                            );
-                          },
-                        ),
-                      ),
-                    ],
-                  ),
-                );
-              },
-            );
-          },
-        );
-      },
-    );
-  }
-
-  void _showVideoDialog(BuildContext context, MediaItem item) {
-    final rawYtId = item.id.startsWith('yt_') ? item.id.replaceFirst('yt_', '') : null;
-    showDialog(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          backgroundColor: const Color(0xFF181224),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          title: const Row(
-            children: [
-              Icon(Icons.smart_display_rounded, color: Colors.redAccent),
-              SizedBox(width: 8),
-              Text('Mode Video Musik', style: TextStyle(color: Colors.white, fontSize: 18)),
-            ],
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Tonton klip video resmi untuk "${item.title}".',
-                style: const TextStyle(color: AppColors.textSecondary, fontSize: 14),
-              ),
-              const SizedBox(height: 12),
-              ClipRRect(
-                borderRadius: BorderRadius.circular(12),
-                child: CachedNetworkImage(
-                  imageUrl: item.artUri?.toString() ?? '',
-                  width: double.infinity,
-                  height: 150,
-                  fit: BoxFit.cover,
-                ),
-              ),
-              const SizedBox(height: 12),
-              Text(
-                rawYtId != null
-                    ? 'Video ID YouTube: $rawYtId'
-                    : 'Pencarian YouTube resmi otomatis',
-                style: const TextStyle(color: Colors.white70, fontSize: 12, fontFamily: 'monospace'),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Tutup', style: TextStyle(color: AppColors.textSecondary)),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<MediaItem?>(
@@ -316,6 +234,18 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
             backgroundColor: AppColors.background,
             body: Center(child: Text('Tidak ada lagu yang sedang diputar')),
           );
+        }
+
+        // Jika lagu berganti saat mode video aktif, muat video baru
+        if (_lastTrackId != mediaItem.id) {
+          _lastTrackId = mediaItem.id;
+          if (_isVideoMode) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (mounted) {
+                _toggleVideoMode(mediaItem);
+              }
+            });
+          }
         }
 
         return Scaffold(
@@ -346,7 +276,12 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
                           children: [
                             const Text(
                               'MEMUTAR DARI KATALOG',
-                              style: TextStyle(color: AppColors.textSecondary, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1),
+                              style: TextStyle(
+                                color: AppColors.textSecondary,
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                                letterSpacing: 1,
+                              ),
                             ),
                             Text(
                               mediaItem.album ?? 'Spotify Lite',
@@ -367,16 +302,100 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
                       ],
                     ),
 
-                    // 2. Cover Art Besar
+                    // 1.5. Segmented Pill Switcher (Lagu vs Video)
+                    Container(
+                      margin: const EdgeInsets.only(top: 8, bottom: 4),
+                      padding: const EdgeInsets.all(3),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.5),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: Colors.white12),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          InkWell(
+                            onTap: () {
+                              if (_isVideoMode) _toggleVideoMode(mediaItem);
+                            },
+                            borderRadius: BorderRadius.circular(16),
+                            child: AnimatedContainer(
+                              duration: const Duration(milliseconds: 200),
+                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
+                              decoration: BoxDecoration(
+                                color: !_isVideoMode ? Colors.white : Colors.transparent,
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    Icons.music_note_rounded,
+                                    size: 14,
+                                    color: !_isVideoMode ? Colors.black : Colors.white70,
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    'Lagu',
+                                    style: TextStyle(
+                                      color: !_isVideoMode ? Colors.black : Colors.white70,
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                          InkWell(
+                            onTap: () {
+                              if (!_isVideoMode) _toggleVideoMode(mediaItem);
+                            },
+                            borderRadius: BorderRadius.circular(16),
+                            child: AnimatedContainer(
+                              duration: const Duration(milliseconds: 200),
+                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
+                              decoration: BoxDecoration(
+                                color: _isVideoMode ? Colors.redAccent.shade700 : Colors.transparent,
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    Icons.smart_display_rounded,
+                                    size: 14,
+                                    color: _isVideoMode ? Colors.white : Colors.redAccent,
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    'Video',
+                                    style: TextStyle(
+                                      color: _isVideoMode ? Colors.white : Colors.white70,
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    // 2. Kotak Banner / Pemutar Video YouTube (Berganti saat Mode Video Aktif)
                     Container(
                       width: double.infinity,
                       constraints: const BoxConstraints(maxHeight: 320),
-                      margin: const EdgeInsets.symmetric(vertical: 24),
+                      margin: const EdgeInsets.symmetric(vertical: 12),
                       decoration: BoxDecoration(
                         borderRadius: BorderRadius.circular(16),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.6),
+                            color: _isVideoMode
+                                ? Colors.red.withValues(alpha: 0.3)
+                                : Colors.black.withValues(alpha: 0.6),
                             blurRadius: 25,
                             offset: const Offset(0, 10),
                           ),
@@ -384,17 +403,9 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
                       ),
                       child: ClipRRect(
                         borderRadius: BorderRadius.circular(16),
-                        child: AspectRatio(
-                          aspectRatio: 1,
-                          child: CachedNetworkImage(
-                            imageUrl: mediaItem.artUri?.toString() ?? '',
-                            fit: BoxFit.cover,
-                            errorWidget: (_, __, ___) => Container(
-                              color: AppColors.card,
-                              child: const Icon(Icons.music_note, size: 80, color: Colors.white),
-                            ),
-                          ),
-                        ),
+                        child: _isVideoMode
+                            ? _buildVideoPlayerContainer(mediaItem)
+                            : _buildCoverArtContainer(mediaItem),
                       ),
                     ),
 
@@ -480,21 +491,42 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          OutlinedButton.icon(
-                            onPressed: () => _showVideoDialog(context, mediaItem),
-                            icon: const Icon(Icons.smart_display_rounded, size: 16, color: Colors.redAccent),
-                            label: const Text('Mode Video', style: TextStyle(color: Colors.white, fontSize: 12)),
-                            style: OutlinedButton.styleFrom(
-                              side: const BorderSide(color: Colors.white24),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                            ),
-                          ),
-                          const SizedBox(width: 10),
+                          // Tombol Mode Video
+                          _isVideoMode
+                              ? ElevatedButton.icon(
+                                  onPressed: () => _toggleVideoMode(mediaItem),
+                                  icon: const Icon(Icons.music_note_rounded, size: 16, color: Colors.white),
+                                  label: const Text(
+                                    'Kembali ke Musik',
+                                    style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                                  ),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: Colors.redAccent.shade700,
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                                  ),
+                                )
+                              : OutlinedButton.icon(
+                                  onPressed: () => _toggleVideoMode(mediaItem),
+                                  icon: const Icon(Icons.smart_display_rounded, size: 16, color: Colors.redAccent),
+                                  label: const Text('Mode Video', style: TextStyle(color: Colors.white, fontSize: 12)),
+                                  style: OutlinedButton.styleFrom(
+                                    side: const BorderSide(color: Colors.white24),
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                  ),
+                                ),
+
+                          const SizedBox(width: 12),
+
+                          // Tombol Lirik Lagu Karaoke Interaktif
                           ElevatedButton.icon(
-                            onPressed: () => _showLyricsBottomSheet(context, mediaItem),
+                            onPressed: () => _showKaraokeLyricsSheet(context, mediaItem),
                             icon: const Icon(Icons.mic_external_on_rounded, size: 16, color: Colors.black),
-                            label: const Text('Lirik Lagu', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 12)),
+                            label: const Text(
+                              'Lirik Lagu',
+                              style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 12),
+                            ),
                             style: ElevatedButton.styleFrom(
                               backgroundColor: AppColors.primary,
                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
@@ -577,10 +609,24 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
                             // Play / Pause Utama
                             GestureDetector(
                               onTap: () {
-                                if (isPlaying) {
-                                  widget.audioHandler.pause();
+                                if (_isVideoMode) {
+                                  // Jika mode video aktif, kontrol pemutar video
+                                  if (_ytController != null) {
+                                    // toggle video play / pause
+                                    _ytController!.playerState.then((state) {
+                                      if (state == PlayerState.playing) {
+                                        _ytController!.pauseVideo();
+                                      } else {
+                                        _ytController!.playVideo();
+                                      }
+                                    });
+                                  }
                                 } else {
-                                  widget.audioHandler.play();
+                                  if (isPlaying) {
+                                    widget.audioHandler.pause();
+                                  } else {
+                                    widget.audioHandler.play();
+                                  }
                                 }
                               },
                               child: Container(
@@ -640,6 +686,120 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
           ),
         );
       },
+    );
+  }
+
+  /// Tampilan Kotak Cover Art Standar (Mode Musik)
+  Widget _buildCoverArtContainer(MediaItem mediaItem) {
+    return AspectRatio(
+      aspectRatio: 1,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          CachedNetworkImage(
+            imageUrl: mediaItem.artUri?.toString() ?? '',
+            fit: BoxFit.cover,
+            errorWidget: (_, __, ___) => Container(
+              color: AppColors.card,
+              child: const Icon(Icons.music_note, size: 80, color: Colors.white),
+            ),
+          ),
+          // Badge cepat untuk nonton video YouTube langsung
+          Positioned(
+            bottom: 12,
+            right: 12,
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: () => _toggleVideoMode(mediaItem),
+                borderRadius: BorderRadius.circular(20),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withValues(alpha: 0.75),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: Colors.white24),
+                  ),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.play_circle_fill_rounded, color: Colors.redAccent, size: 16),
+                      SizedBox(width: 4),
+                      Text(
+                        'Tonton Video',
+                        style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Tampilan Pemutar Video YouTube Asli (Mode Video YouTube / Anime)
+  Widget _buildVideoPlayerContainer(MediaItem mediaItem) {
+    return AspectRatio(
+      aspectRatio: 16 / 9,
+      child: Container(
+        color: Colors.black,
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            if (_ytController != null && !_isLoadingVideo && _videoError == null)
+              YoutubePlayer(
+                controller: _ytController!,
+                aspectRatio: 16 / 9,
+              ),
+
+            if (_isLoadingVideo)
+              const Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    CircularProgressIndicator(color: AppColors.primary),
+                    SizedBox(height: 12),
+                    Text(
+                      'Menyiapkan Video YouTube...',
+                      style: TextStyle(color: Colors.white70, fontSize: 12),
+                    ),
+                  ],
+                ),
+              ),
+
+            if (_videoError != null)
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(Icons.smart_display_outlined, color: Colors.redAccent, size: 40),
+                      const SizedBox(height: 8),
+                      Text(
+                        _videoError!,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(color: Colors.white70, fontSize: 12),
+                      ),
+                      const SizedBox(height: 10),
+                      ElevatedButton(
+                        onPressed: () => _toggleVideoMode(mediaItem),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.white12,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                        ),
+                        child: const Text('Coba Lagi', style: TextStyle(color: Colors.white, fontSize: 11)),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
     );
   }
 }

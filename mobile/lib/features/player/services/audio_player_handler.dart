@@ -5,6 +5,7 @@ import 'package:just_audio/just_audio.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 import '../../../core/constants/api_endpoints.dart';
+import '../../../core/services/direct_music_service.dart';
 
 /// Implementasi Engine Pemutar Musik Latar Belakang (Background Playback)
 /// Mengintegrasikan just_audio dengan AudioService (Foreground Service Android & MediaSession)
@@ -177,7 +178,21 @@ class AudioPlayerHandler extends BaseAudioHandler with SeekHandler {
         // Gunakan streaming server backend (yt-dlp) untuk menghindari 403 Forbidden dari Google CDN
         final serverStreamUrl = '${ApiEndpoints.baseUrl}${ApiEndpoints.streamSong(item.id)}';
         debugPrint('Memutar stream audio via backend: $serverStreamUrl');
-        await _player.setUrl(serverStreamUrl, preload: true);
+        try {
+          await _player.setUrl(serverStreamUrl, preload: true);
+        } catch (serverErr) {
+          debugPrint('Backend stream gagal ($serverErr), fallback ke DirectMusicService...');
+          final directUrl = await DirectMusicService.instance.getStreamUrl(
+            item.id,
+            title: item.title,
+            artist: item.artist,
+          );
+          if (directUrl != null) {
+            await _player.setUrl(directUrl, preload: true);
+          } else {
+            rethrow;
+          }
+        }
       }
 
       if (_player.duration != null && _player.duration != item.duration) {

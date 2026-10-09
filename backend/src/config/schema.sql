@@ -23,7 +23,7 @@ END $$;
 
 -- 3. Tabel Users
 CREATE TABLE IF NOT EXISTS users (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id VARCHAR(100) PRIMARY KEY DEFAULT uuid_generate_v4()::text,
     name VARCHAR(100) NOT NULL,
     email VARCHAR(150) UNIQUE NOT NULL,
     password_hash VARCHAR(255) NOT NULL,
@@ -35,7 +35,7 @@ CREATE TABLE IF NOT EXISTS users (
 
 -- 4. Tabel Artists
 CREATE TABLE IF NOT EXISTS artists (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id VARCHAR(100) PRIMARY KEY,
     name VARCHAR(150) NOT NULL,
     bio TEXT DEFAULT NULL,
     image_url TEXT DEFAULT NULL,
@@ -45,8 +45,8 @@ CREATE TABLE IF NOT EXISTS artists (
 
 -- 5. Tabel Albums
 CREATE TABLE IF NOT EXISTS albums (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    artist_id UUID NOT NULL REFERENCES artists(id) ON DELETE CASCADE,
+    id VARCHAR(100) PRIMARY KEY,
+    artist_id VARCHAR(100) NOT NULL REFERENCES artists(id) ON DELETE CASCADE,
     title VARCHAR(150) NOT NULL,
     cover_url TEXT DEFAULT NULL,
     release_year SMALLINT DEFAULT NULL,
@@ -56,10 +56,10 @@ CREATE TABLE IF NOT EXISTS albums (
 
 -- 6. Tabel Songs (Lagu)
 CREATE TABLE IF NOT EXISTS songs (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id VARCHAR(100) PRIMARY KEY,
     title VARCHAR(200) NOT NULL,
-    artist_id UUID NOT NULL REFERENCES artists(id) ON DELETE CASCADE,
-    album_id UUID REFERENCES albums(id) ON DELETE SET NULL,
+    artist_id VARCHAR(100) NOT NULL REFERENCES artists(id) ON DELETE CASCADE,
+    album_id VARCHAR(100) REFERENCES albums(id) ON DELETE SET NULL,
     duration_seconds INT NOT NULL DEFAULT 0,
     file_path TEXT NOT NULL,
     file_size BIGINT NOT NULL DEFAULT 0,
@@ -75,8 +75,8 @@ CREATE TABLE IF NOT EXISTS songs (
 
 -- 7. Tabel Playlists
 CREATE TABLE IF NOT EXISTS playlists (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    id VARCHAR(100) PRIMARY KEY DEFAULT uuid_generate_v4()::text,
+    user_id VARCHAR(100) NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     title VARCHAR(150) NOT NULL,
     description TEXT DEFAULT NULL,
     cover_url TEXT DEFAULT NULL,
@@ -87,9 +87,9 @@ CREATE TABLE IF NOT EXISTS playlists (
 
 -- 8. Tabel Relasi Playlist_Songs (Urutan lagu dengan order_index)
 CREATE TABLE IF NOT EXISTS playlist_songs (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    playlist_id UUID NOT NULL REFERENCES playlists(id) ON DELETE CASCADE,
-    song_id UUID NOT NULL REFERENCES songs(id) ON DELETE CASCADE,
+    id VARCHAR(100) PRIMARY KEY DEFAULT uuid_generate_v4()::text,
+    playlist_id VARCHAR(100) NOT NULL REFERENCES playlists(id) ON DELETE CASCADE,
+    song_id VARCHAR(100) NOT NULL REFERENCES songs(id) ON DELETE CASCADE,
     order_index INT NOT NULL DEFAULT 0,
     added_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT uq_playlist_song UNIQUE (playlist_id, song_id)
@@ -97,27 +97,27 @@ CREATE TABLE IF NOT EXISTS playlist_songs (
 
 -- 9. Tabel Liked_Songs (Lagu yang Disukai Pengguna)
 CREATE TABLE IF NOT EXISTS liked_songs (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    song_id UUID NOT NULL REFERENCES songs(id) ON DELETE CASCADE,
+    id VARCHAR(100) PRIMARY KEY DEFAULT uuid_generate_v4()::text,
+    user_id VARCHAR(100) NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    song_id VARCHAR(100) NOT NULL REFERENCES songs(id) ON DELETE CASCADE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT uq_user_liked_song UNIQUE (user_id, song_id)
 );
 
 -- 10. Tabel Play_History (Riwayat Putar Lagu)
 CREATE TABLE IF NOT EXISTS play_history (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    song_id UUID NOT NULL REFERENCES songs(id) ON DELETE CASCADE,
+    id VARCHAR(100) PRIMARY KEY DEFAULT uuid_generate_v4()::text,
+    user_id VARCHAR(100) NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    song_id VARCHAR(100) NOT NULL REFERENCES songs(id) ON DELETE CASCADE,
     played_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     completed_percentage SMALLINT DEFAULT 100 -- Persentase penyelesaian lagu (0-100)
 );
 
 -- 11. Tabel Downloads (Pencatatan Sinkronisasi Mode Offline di Device)
 CREATE TABLE IF NOT EXISTS downloads (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    song_id UUID NOT NULL REFERENCES songs(id) ON DELETE CASCADE,
+    id VARCHAR(100) PRIMARY KEY DEFAULT uuid_generate_v4()::text,
+    user_id VARCHAR(100) NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    song_id VARCHAR(100) NOT NULL REFERENCES songs(id) ON DELETE CASCADE,
     quality audio_quality DEFAULT 'medium',
     downloaded_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT uq_user_download UNIQUE (user_id, song_id)
@@ -125,11 +125,11 @@ CREATE TABLE IF NOT EXISTS downloads (
 
 -- 12. Tabel User_Settings & Player State (Sinkronisasi Antrean & Status Terakhir)
 CREATE TABLE IF NOT EXISTS user_settings (
-    user_id UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+    user_id VARCHAR(100) PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
     audio_quality audio_quality DEFAULT 'medium',
     theme VARCHAR(20) DEFAULT 'dark',
     offline_mode BOOLEAN DEFAULT false,
-    last_played_song_id UUID REFERENCES songs(id) ON DELETE SET NULL,
+    last_played_song_id VARCHAR(100) REFERENCES songs(id) ON DELETE SET NULL,
     last_played_position_seconds INT DEFAULT 0,
     last_queue_ids JSONB DEFAULT '[]'::jsonb, -- Array ID lagu yang terakhir ada di antrean
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP

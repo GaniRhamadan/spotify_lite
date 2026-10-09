@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Play, Pause, Trash2, ArrowUp, ArrowDown, Music } from 'lucide-react';
+import { Play, Pause, Trash2, ArrowUp, ArrowDown, Music, Plus, Search, X } from 'lucide-react';
 import { apiRequest } from '../services/api';
 import { IPlaylist, ISong } from '../types';
 import { Navbar } from '../components/Navbar';
@@ -17,6 +17,10 @@ export const PlaylistDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const [playlist, setPlaylist] = useState<IPlaylist | null>(null);
   const [songs, setSongs] = useState<ISong[]>([]);
+  const [isAddSongOpen, setIsAddSongOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<ISong[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
   const { currentSong, isPlaying, playSong, togglePlayPause } = useAudio();
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -36,6 +40,45 @@ export const PlaylistDetailPage: React.FC = () => {
   useEffect(() => {
     loadPlaylist();
   }, [id]);
+
+  useEffect(() => {
+    if (!isAddSongOpen) {
+      setSearchQuery('');
+      setSearchResults([]);
+      return;
+    }
+
+    const timer = setTimeout(async () => {
+      try {
+        setIsSearching(true);
+        const query = searchQuery.trim() || 'pop';
+        const res = await apiRequest(`/search?q=${encodeURIComponent(query)}`);
+        if (res.success && res.data) {
+          setSearchResults(res.data.songs || []);
+        }
+      } catch (e) {
+        console.error('Gagal mencari lagu:', e);
+      } finally {
+        setIsSearching(false);
+      }
+    }, 250);
+
+    return () => clearTimeout(timer);
+  }, [searchQuery, isAddSongOpen]);
+
+  const handleAddSong = async (songId: string) => {
+    try {
+      const res = await apiRequest(`/playlists/${id}/songs`, {
+        method: 'POST',
+        body: JSON.stringify({ songId }),
+      });
+      if (res.success) {
+        await loadPlaylist();
+      }
+    } catch (err: any) {
+      alert(err.message || 'Gagal menambahkan lagu');
+    }
+  };
 
   const isPlaylistPlaying =
     isPlaying && songs.some((s) => s.id === currentSong?.id);
@@ -131,6 +174,16 @@ export const PlaylistDetailPage: React.FC = () => {
               <Play className="w-7 h-7 fill-black stroke-black ml-1" />
             )}
           </button>
+
+          {isOwner && (
+            <button
+              onClick={() => setIsAddSongOpen(true)}
+              className="flex items-center gap-x-2 px-4 py-2.5 rounded-full border border-white/20 hover:border-white text-sm font-semibold text-white transition-colors hover:bg-white/5 active:scale-95"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Tambah Lagu</span>
+            </button>
+          )}
         </div>
 
         {/* Tabel Lagu Playlist */}
@@ -191,7 +244,7 @@ export const PlaylistDetailPage: React.FC = () => {
                       <button
                         onClick={() => handleRemoveSong(song.id)}
                         title="Hapus dari Playlist"
-                        className="p-1 text-spotify-subtext hover:text-red-400 ml-1"
+                        className="p-1 text-spotify-subtext hover:red-400 ml-1"
                       >
                         <Trash2 className="w-4 h-4" />
                       </button>
@@ -211,12 +264,90 @@ export const PlaylistDetailPage: React.FC = () => {
           <div className="text-center py-16">
             <Music className="w-12 h-12 mx-auto text-spotify-subtext mb-3" />
             <p className="text-base font-semibold text-white">Playlist ini masih kosong</p>
-            <p className="text-xs text-spotify-subtext mt-1">
+            <p className="text-xs text-spotify-subtext mt-1 mb-4">
               Cari lagu favorit Anda dan tambahkan ke playlist ini.
             </p>
+            {isOwner && (
+              <button
+                onClick={() => setIsAddSongOpen(true)}
+                className="px-5 py-2.5 rounded-full bg-spotify-green text-black font-bold text-xs hover:scale-105 active:scale-95 transition-transform"
+              >
+                Cari & Tambah Lagu
+              </button>
+            )}
           </div>
         )}
       </main>
+
+      {/* Modal Tambah Lagu */}
+      {isAddSongOpen && (
+        <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4">
+          <div className="bg-[#282828] w-full max-w-lg rounded-xl shadow-2xl p-6 border border-white/10 flex flex-col max-h-[80vh]">
+            <div className="flex items-center justify-between pb-4 border-b border-white/10">
+              <h2 className="text-xl font-bold text-white">Tambah Lagu ke Playlist</h2>
+              <button
+                onClick={() => setIsAddSongOpen(false)}
+                className="p-1 text-spotify-subtext hover:text-white rounded-full transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="mt-4 relative">
+              <Search className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-spotify-subtext" />
+              <input
+                type="text"
+                placeholder="Cari lagu (contoh: 18, One Direction, Queen)..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full bg-[#3e3e3e] text-white pl-10 pr-4 py-2.5 rounded-full text-sm outline-none focus:ring-2 focus:ring-spotify-green"
+                autoFocus
+              />
+            </div>
+
+            <div className="mt-4 flex-1 overflow-y-auto divide-y divide-white/5 space-y-2 pr-1">
+              {isSearching && (
+                <div className="text-center py-8 text-xs text-spotify-subtext">Mencari katalog...</div>
+              )}
+              {!isSearching &&
+                searchResults.map((s) => {
+                  const isAlreadyAdded = songs.some((ps) => ps.id === s.id);
+                  return (
+                    <div key={s.id} className="flex items-center justify-between py-2.5 pt-2.5">
+                      <div className="flex items-center gap-3 truncate flex-1">
+                        <img
+                          src={s.cover_url || 'https://images.unsplash.com/photo-1518495973542-4542c06a5843?w=100'}
+                          alt={s.title}
+                          className="w-10 h-10 rounded object-cover flex-shrink-0"
+                        />
+                        <div className="truncate">
+                          <p className="text-sm font-semibold text-white truncate">{s.title}</p>
+                          <p className="text-xs text-spotify-subtext truncate">{s.artist_name || 'Artis'}</p>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => handleAddSong(s.id)}
+                        disabled={isAlreadyAdded}
+                        className={`ml-3 px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${
+                          isAlreadyAdded
+                            ? 'bg-white/10 text-spotify-subtext cursor-default'
+                            : 'bg-spotify-green text-black hover:scale-105 active:scale-95'
+                        }`}
+                      >
+                        {isAlreadyAdded ? 'Ditambahkan' : 'Tambah'}
+                      </button>
+                    </div>
+                  );
+                })}
+              {!isSearching && searchQuery.trim() && searchResults.length === 0 && (
+                <div className="text-center py-8 text-xs text-spotify-subtext">
+                  Tidak ada lagu yang cocok dengan pencarian Anda
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

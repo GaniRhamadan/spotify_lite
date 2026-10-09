@@ -21,6 +21,7 @@ dependencies:
   wakelock_plus: ^1.2.8
   cupertino_icons: ^1.0.8
   youtube_explode_dart: ^3.1.0
+  youtube_player_iframe: ^6.0.2
 
 dev_dependencies:
   flutter_test:

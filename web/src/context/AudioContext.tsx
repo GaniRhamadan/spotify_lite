@@ -29,6 +29,8 @@ interface AudioContextType {
   toggleRepeat: () => void;
   toggleLikeCurrentSong: () => Promise<void>;
   setIsFullscreenOpen: (open: boolean) => void;
+  playbackError: string | null;
+  clearPlaybackError: () => void;
 }
 
 const AudioContext = createContext<AudioContextType | undefined>(undefined);
@@ -47,8 +49,37 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [isFullscreenOpen, setIsFullscreenOpen] = useState<boolean>(false);
   const [fullscreenTab, setFullscreenTab] = useState<'cover' | 'video' | 'lyrics' | 'queue'>('cover');
 
+  const [playbackError, setPlaybackError] = useState<string | null>(null);
+
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const hasRecordedHistoryRef = useRef<boolean>(false);
+
+  // Synchronous refs untuk menghindari stale closure di event listener audio
+  const queueRef = useRef<ISong[]>(queue);
+  const queueIndexRef = useRef<number>(queueIndex);
+  const repeatModeRef = useRef<RepeatMode>(repeatMode);
+  const isShuffleRef = useRef<boolean>(isShuffle);
+  const currentSongRef = useRef<ISong | null>(currentSong);
+
+  useEffect(() => {
+    queueRef.current = queue;
+  }, [queue]);
+
+  useEffect(() => {
+    queueIndexRef.current = queueIndex;
+  }, [queueIndex]);
+
+  useEffect(() => {
+    repeatModeRef.current = repeatMode;
+  }, [repeatMode]);
+
+  useEffect(() => {
+    isShuffleRef.current = isShuffle;
+  }, [isShuffle]);
+
+  useEffect(() => {
+    currentSongRef.current = currentSong;
+  }, [currentSong]);
 
   // Inisialisasi audio element sekali saat mount
   useEffect(() => {
@@ -60,28 +91,59 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const onTimeUpdate = () => {
       setCurrentTime(audio.currentTime);
       // Catat riwayat jika sudah diputar lebih dari 30 detik
-      if (audio.currentTime > 30 && !hasRecordedHistoryRef.current && currentSong) {
+      if (audio.currentTime > 30 && !hasRecordedHistoryRef.current && currentSongRef.current) {
         hasRecordedHistoryRef.current = true;
         apiRequest('/user/history', {
           method: 'POST',
-          body: JSON.stringify({ songId: currentSong.id }),
+          body: JSON.stringify({ songId: currentSongRef.current.id }),
         }).catch(() => {});
       }
     };
 
     const onLoadedMetadata = () => {
       setDuration(audio.duration || 0);
+      setPlaybackError(null);
     };
 
-    const onPlay = () => setIsPlaying(true);
+    const onPlay = () => {
+      setIsPlaying(true);
+      setPlaybackError(null);
+    };
+
     const onPause = () => setIsPlaying(false);
-    const onEnded = () => handleSongEnded();
+
+    const onEnded = () => {
+      if (repeatModeRef.current === 'one') {
+        if (audioRef.current) {
+          audioRef.current.currentTime = 0;
+          audioRef.current.play().catch(() => {});
+        }
+      } else {
+        triggerNextSong();
+      }
+    };
+
+    const onError = (e: Event) => {
+      console.warn('Audio playback error encountered:', e);
+      setIsPlaying(false);
+      const failedSong = currentSongRef.current;
+      setPlaybackError(`Gagal memutar "${failedSong?.title || 'lagu'}". Berkas audio tidak dapat diakses.`);
+
+      // Fallback: jika lagu di antrean gagal dimuat, otomatis coba beralih ke lagu berikutnya
+      const q = queueRef.current;
+      if (q.length > 1) {
+        setTimeout(() => {
+          triggerNextSong();
+        }, 1500);
+      }
+    };
 
     audio.addEventListener('timeupdate', onTimeUpdate);
     audio.addEventListener('loadedmetadata', onLoadedMetadata);
     audio.addEventListener('play', onPlay);
     audio.addEventListener('pause', onPause);
     audio.addEventListener('ended', onEnded);
+    audio.addEventListener('error', onError);
 
     return () => {
       audio.pause();
@@ -90,6 +152,7 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       audio.removeEventListener('play', onPlay);
       audio.removeEventListener('pause', onPause);
       audio.removeEventListener('ended', onEnded);
+      audio.removeEventListener('error', onError);
     };
   }, []);
 
@@ -121,20 +184,35 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }
   }, [currentSong, isPlaying]);
 
-  const handleSongEnded = () => {
-    if (repeatMode === 'one') {
-      if (audioRef.current) {
-        audioRef.current.currentTime = 0;
-        audioRef.current.play();
+  const triggerNextSong = () => {
+    const q = queueRef.current;
+    if (q.length === 0) return;
+
+    const repMode = repeatModeRef.current;
+    const shuffle = isShuffleRef.current;
+    let nextIdx = queueIndexRef.current + 1;
+
+    if (shuffle) {
+      nextIdx = Math.floor(Math.random() * q.length);
+    } else if (nextIdx >= q.length) {
+      if (repMode === 'all') {
+        nextIdx = 0;
+      } else {
+        setIsPlaying(false);
+        return; // Akhir antrean
       }
-    } else {
-      nextSong();
+    }
+
+    const nextTrack = q[nextIdx];
+    if (nextTrack) {
+      playSong(nextTrack, q);
     }
   };
 
   const playSong = (song: ISong, newQueue?: ISong[]) => {
     hasRecordedHistoryRef.current = false;
-    let targetQueue = queue;
+    setPlaybackError(null);
+    let targetQueue = queueRef.current;
 
     // Algoritma Rekomendasi: Catat frekuensi artis yang sering didengarkan user
     try {
@@ -151,14 +229,20 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     if (newQueue && newQueue.length > 0) {
       targetQueue = newQueue;
       setQueue(newQueue);
-    } else if (!queue.some(s => s.id === song.id)) {
-      targetQueue = [song, ...queue];
+      queueRef.current = newQueue;
+    } else if (!targetQueue.some(s => s.id === song.id)) {
+      targetQueue = [song, ...targetQueue];
       setQueue(targetQueue);
+      queueRef.current = targetQueue;
     }
 
     const idx = targetQueue.findIndex(s => s.id === song.id);
-    setQueueIndex(idx !== -1 ? idx : 0);
+    const validIdx = idx !== -1 ? idx : 0;
+    setQueueIndex(validIdx);
+    queueIndexRef.current = validIdx;
+
     setCurrentSong(song);
+    currentSongRef.current = song;
 
     if (audioRef.current) {
       const streamUrl = getStreamUrl(song.id);
@@ -179,50 +263,26 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   };
 
   const nextSong = () => {
-    if (queue.length === 0) return;
-
-    if (repeatMode === 'one') {
-      if (audioRef.current) {
-        audioRef.current.currentTime = 0;
-        audioRef.current.play();
-      }
-      return;
-    }
-
-    let nextIdx = queueIndex + 1;
-    if (isShuffle) {
-      nextIdx = Math.floor(Math.random() * queue.length);
-    } else if (nextIdx >= queue.length) {
-      if (repeatMode === 'all') {
-        nextIdx = 0;
-      } else {
-        return; // Akhir antrean
-      }
-    }
-
-    const nextTrack = queue[nextIdx];
-    if (nextTrack) {
-      playSong(nextTrack, queue);
-    }
+    triggerNextSong();
   };
 
   const prevSong = () => {
-    if (queue.length === 0) return;
+    const q = queueRef.current;
+    if (q.length === 0) return;
 
-    // Jika lagu sudah berjalan lebih dari 3 detik, restart lagu
-    if (currentTime > 3) {
+    if (audioRef.current && audioRef.current.currentTime > 3) {
       seekTo(0);
       return;
     }
 
-    let prevIdx = queueIndex - 1;
+    let prevIdx = queueIndexRef.current - 1;
     if (prevIdx < 0) {
-      prevIdx = repeatMode === 'all' ? queue.length - 1 : 0;
+      prevIdx = repeatModeRef.current === 'all' ? q.length - 1 : 0;
     }
 
-    const prevTrack = queue[prevIdx];
+    const prevTrack = q[prevIdx];
     if (prevTrack) {
-      playSong(prevTrack, queue);
+      playSong(prevTrack, q);
     }
   };
 
@@ -292,6 +352,8 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         toggleRepeat,
         toggleLikeCurrentSong,
         setIsFullscreenOpen,
+        playbackError,
+        clearPlaybackError: () => setPlaybackError(null),
       }}
     >
       {children}

@@ -164,6 +164,18 @@ async function runSeed() {
             bio: 'Alunan tropical indie pop santai bernuansa liburan musim panas.',
             image_url: 'https://images.unsplash.com/photo-1465847899084-d164df4dedc6?w=500&auto=format&fit=crop&q=80',
         },
+        {
+            id: 'a0700000-0000-0000-0000-000000000007',
+            name: 'One Direction',
+            bio: 'Boyband pop Inggris-Irlandia sensasional pencetak rekor global.',
+            image_url: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=500&auto=format&fit=crop&q=80',
+        },
+        {
+            id: 'a0800000-0000-0000-0000-000000000008',
+            name: 'Queen',
+            bio: 'Band rock legendaris asal Inggris yang dipimpin Freddie Mercury.',
+            image_url: 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=500&auto=format&fit=crop&q=80',
+        },
     ];
     // 2. Data Album Lengkap
     const albumData = [
@@ -201,6 +213,20 @@ async function runSeed() {
             title: 'Melodi Hening',
             cover_url: 'https://images.unsplash.com/photo-1511192336575-5a79af67a629?w=500&auto=format&fit=crop&q=80',
             release_year: 2024,
+        },
+        {
+            id: 'b6000000-0000-0000-0000-000000000006',
+            artist_id: 'a0700000-0000-0000-0000-000000000007',
+            title: 'FOUR',
+            cover_url: 'https://i.ytimg.com/vi/VRpzJabYlQQ/hqdefault.jpg',
+            release_year: 2014,
+        },
+        {
+            id: 'b7000000-0000-0000-0000-000000000007',
+            artist_id: 'a0800000-0000-0000-0000-000000000008',
+            title: 'A Night at the Opera',
+            cover_url: 'https://i.ytimg.com/vi/fJ9rUzIMcZQ/hqdefault.jpg',
+            release_year: 1975,
         },
     ];
     // 3. Data Koleksi Lagu Lengkap (Lagu Nyata Populer & Koleksi Instrumen Studio)
@@ -283,6 +309,32 @@ async function runSeed() {
             cover_url: 'https://i.ytimg.com/vi/kPa7bsKwL-c/hqdefault.jpg',
             lyrics: '[00:00.00] Ooh, if the world was ending, I\'d wanna be next to you.\n[00:25.00] If the party was over and our time on Earth was through.\n[00:50.00] I\'d wanna hold you just for a while.\n[01:15.00] And die with a smile.',
             play_count: 750000000,
+        },
+        {
+            id: 'yt_VRpzJabYlQQ',
+            title: '18',
+            artist_id: 'a0700000-0000-0000-0000-000000000007',
+            album_id: 'b6000000-0000-0000-0000-000000000006',
+            duration_seconds: 248,
+            file_path: 'yt_VRpzJabYlQQ.m4a',
+            freq: 440,
+            pattern: 0,
+            cover_url: 'https://i.ytimg.com/vi/VRpzJabYlQQ/hqdefault.jpg',
+            lyrics: '[00:00.00] I got a heart and I got a soul.\n[00:07.00] Believe me I will use them both.\n[00:15.00] We made a start, be made it damn far.\n[00:23.00] Our love will never turn to rust.\n[00:30.00] I have loved you since we were 18.\n[00:36.00] Long before we both thought the same thing.\n[00:43.00] To be loved, to be in love.\n[00:50.00] All I can do is say that these arms are made for holding you.',
+            play_count: 580000000,
+        },
+        {
+            id: 'yt_fJ9rUzIMcZQ',
+            title: 'Bohemian Rhapsody',
+            artist_id: 'a0800000-0000-0000-0000-000000000008',
+            album_id: 'b7000000-0000-0000-0000-000000000007',
+            duration_seconds: 359,
+            file_path: 'yt_fJ9rUzIMcZQ.m4a',
+            freq: 440,
+            pattern: 1,
+            cover_url: 'https://i.ytimg.com/vi/fJ9rUzIMcZQ/hqdefault.jpg',
+            lyrics: '[00:00.00] Is this the real life? Is this just fantasy?\n[00:15.00] Caught in a landslide, no escape from reality.\n[00:30.00] Open your eyes, look up to the skies and see.\n[00:50.00] Mama, just killed a man, put a gun against his head.\n[01:10.00] Pulled my trigger, now he\'s dead.\n[01:25.00] Mama, life had just begun, but now I\'ve gone and thrown it all away.',
+            play_count: 1800000000,
         },
         // --- KOLEKSI MUSIK INSTRUMENTAL & RELAKSASI ---
         {
@@ -581,7 +633,7 @@ async function runSeed() {
             title = EXCLUDED.title,
             lyrics = EXCLUDED.lyrics,
             cover_url = EXCLUDED.cover_url,
-            play_count = EXCLUDED.play_count`, [s.id, s.title, s.artist_id, s.album_id, s.duration_seconds, s.file_path, stats.size, 'audio/wav', 1411200, s.cover_url, s.lyrics, s.play_count]);
+            play_count = EXCLUDED.play_count`, [s.id, s.title, s.artist_id, s.album_id, s.duration_seconds, s.file_path, stats.size, s.file_path.endsWith('.m4a') ? 'audio/mp4' : 'audio/wav', 1411200, s.cover_url, s.lyrics, s.play_count]);
             }
             for (const p of playlistData) {
                 await database_1.pool.query(`INSERT INTO playlists (id, user_id, title, description, cover_url, is_public)
@@ -637,4 +689,14 @@ async function runSeed() {
         { id: (0, uuid_1.v4)(), playlist_id: playlistData[2].id, song_id: songData[11].id, order_index: 2 },
     ];
     console.log(`✅ Data lagu, artis, dan album awal berhasil dimuat (Total ${songData.length} lagu lengkap siap streaming!).`);
+}
+if (require.main === module) {
+    (async () => {
+        await (0, database_1.checkDatabaseConnection)();
+        await runSeed();
+        process.exit(0);
+    })().catch(err => {
+        console.error('Seed error:', err);
+        process.exit(1);
+    });
 }
